@@ -74,8 +74,9 @@ npm run dev
 ```
 
 ### .env (backend)
+
 ```
-DATABASE_URL="postgresql://usuario:senha@localhost:5432/avidus_db"
+DATABASE_URL="postgresql://usuario:senha@localhost:5432/db"
 PORT=3001
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:5173
@@ -97,28 +98,28 @@ npm run dev
 
 ## Rotas da API
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/api/stock/analyze/:ticker` | Analisa ativo (ex: `PETR4.SA`, `AAPL`) |
-| DELETE | `/api/stock/cache/:ticker` | Invalida cache do ticker |
-| GET | `/api/config/profiles` | Lista todos os perfis |
-| GET | `/api/config/profiles/:name` | Perfil específico |
-| PUT | `/api/config/profiles/:name/indicators` | Atualiza pesos |
-| PUT | `/api/config/profiles/:name/thresholds` | Atualiza thresholds |
-| POST | `/api/config/reset` | Reseta todos os perfis |
-| POST | `/api/config/reset/:name` | Reseta um perfil |
-| GET | `/health` | Health check |
+| Método | Rota                                    | Descrição                              |
+| ------ | --------------------------------------- | -------------------------------------- |
+| GET    | `/api/stock/analyze/:ticker`            | Analisa ativo (ex: `PETR4.SA`, `AAPL`) |
+| DELETE | `/api/stock/cache/:ticker`              | Invalida cache do ticker               |
+| GET    | `/api/config/profiles`                  | Lista todos os perfis                  |
+| GET    | `/api/config/profiles/:name`            | Perfil específico                      |
+| PUT    | `/api/config/profiles/:name/indicators` | Atualiza pesos                         |
+| PUT    | `/api/config/profiles/:name/thresholds` | Atualiza thresholds                    |
+| POST   | `/api/config/reset`                     | Reseta todos os perfis                 |
+| POST   | `/api/config/reset/:name`               | Reseta um perfil                       |
+| GET    | `/health`                               | Health check                           |
 
 ---
 
 ## Perfis de Investidor
 
-| Perfil | Foco |
-|--------|------|
-| 📊 GENERICO | Fundamentalista básico (P/L, ROE, etc.) |
-| 🛡️ CONSERVADOR | Segurança, dividendos, baixo beta |
-| ⚖️ MODERADO | Equilibrado — técnica + fundamentos |
-| 🚀 AGRESSIVO | Momentum, crescimento, tolerância a risco |
+| Perfil         | Foco                                      |
+| -------------- | ----------------------------------------- |
+| 📊 GENERICO    | Fundamentalista básico (P/L, ROE, etc.)   |
+| 🛡️ CONSERVADOR | Segurança, dividendos, baixo beta         |
+| ⚖️ MODERADO    | Equilibrado — técnica + fundamentos       |
+| 🚀 AGRESSIVO   | Momentum, crescimento, tolerância a risco |
 
 ---
 

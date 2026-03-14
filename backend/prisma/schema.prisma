@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InvestorProfile {
+  GENERICO
+  CONSERVADOR
+  MODERADO
+  AGRESSIVO
+}
+
+enum DecisionType {
+  COMPRA_FORTE
+  COMPRA
+  MANTER
+  VENDA
+  VENDA_FORTE
+}
+
+model IndicatorConfig {
+  id          String          @id @default(uuid())
+  profile     InvestorProfile
+  indicatorId String
+  weight      Float
+  idealRange  String?
+  category    String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([profile, indicatorId])
+  @@map("indicator_configs")
+}
+
+model ScoreThreshold {
+  id        String          @id @default(uuid())
+  profile   InvestorProfile
+  decision  DecisionType
+  minScore  Float
+  emoji     String
+  desc      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([profile, decision])
+  @@map("score_thresholds")
+}
+
+model StockDataCache {
+  id        String   @id @default(uuid())
+  ticker    String
+  date      String
+  rawData   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ticker, date])
+  @@map("stock_data_cache")
+}
+
+model StockAnalysis {
+  id           String          @id @default(uuid())
+  ticker       String
+  profile      InvestorProfile
+  date         String
+  score        Float
+  decision     DecisionType
+  emoji        String
+  description  String
+  analysisData Json
+  createdAt    DateTime        @default(now())
+
+  @@index([ticker, profile, date])
+  @@map("stock_analyses")
+}
