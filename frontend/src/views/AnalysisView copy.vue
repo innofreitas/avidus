@@ -38,57 +38,6 @@ async function refresh() {
 }
 
 const currSymbol = computed(() => result.value?.meta?.currency === "USD" ? "US$" : "R$");
-
-/**
- * Retorna o valor real da API para cada indicatorId, formatado para exibição na tabela.
- * Lê de result.technical e result.fundamental (valores já processados pelo analysisService).
- */
-function indicatorRawValue(id: string): string {
-  const tech = result.value?.technical;
-  const fund = result.value?.fundamental;
-  const f2   = (v: number | null | undefined, dec = 2) => v != null ? v.toFixed(dec) : "—";
-
-  switch (id) {
-    // ── Fundamentalistas
-    case "pl":            return fund?.pl?.value            != null ? `${f2(fund.pl.value)}x`             : "—";
-    case "pvp":           return fund?.pvp?.value           != null ? `${f2(fund.pvp.value)}x`            : "—";
-    case "roe":           return fund?.roe?.value           != null ? `${f2(fund.roe.value)}%`            : "—";
-    case "margemLiquida": return fund?.margemLiquida?.value != null ? `${f2(fund.margemLiquida.value)}%`  : "—";
-    case "dividaEbitda":  return fund?.dividaEbitda?.value  != null ? `${f2(fund.dividaEbitda.value)}x`   : "—";
-    case "earningsGrowth":return fund?.earningsGrowth?.value!= null ? `${f2(fund.earningsGrowth.value)}%` : "—";
-    case "dividendYield": return fund?.dividendYield?.value != null ? `${f2(fund.dividendYield.value)}%`  : "—";
-    case "beta":          return fund?.beta?.value          != null ? `β ${f2(fund.beta.value)}`          : "—";
-    // ── Técnicos
-    case "rsi":    return tech?.rsi?.value != null ? f2(tech.rsi.value, 1) : "—";
-    case "precoVsMMs": {
-      const ma = tech?.movingAverages;
-      if (!ma) return "—";
-      const parts: string[] = [];
-      if (ma.pctVsMM20  != null) parts.push(`MM20 ${ma.pctVsMM20  >= 0 ? "+" : ""}${ma.pctVsMM20.toFixed(1)}%`);
-      if (ma.pctVsMM50  != null) parts.push(`MM50 ${ma.pctVsMM50  >= 0 ? "+" : ""}${ma.pctVsMM50.toFixed(1)}%`);
-      if (ma.pctVsMM200 != null) parts.push(`MM200 ${ma.pctVsMM200 >= 0 ? "+" : ""}${ma.pctVsMM200.toFixed(1)}%`);
-      return parts.length ? parts.join(" · ") : "—";
-    }
-    case "macd":
-      return tech?.macd?.histogram != null
-        ? `hist ${tech.macd.histogram >= 0 ? "+" : ""}${tech.macd.histogram.toFixed(4)}`
-        : "—";
-    case "tendencia":   return tech?.trend?.label ?? "—";
-    case "breakout":
-      return tech?.breakout52w?.positionInRangePct != null
-        ? `${tech.breakout52w.positionInRangePct}% faixa`
-        : "—";
-    case "volatilidade":
-      return tech?.volatility?.annualizedPct != null
-        ? `${f2(tech.volatility.annualizedPct)}% a.a.`
-        : "—";
-    case "drawdown":
-      return tech?.maxDrawdown?.maxDrawdownPct != null
-        ? `${f2(tech.maxDrawdown.maxDrawdownPct)}%`
-        : "—";
-    default: return "—";
-  }
-}
 </script>
 
 <template>
@@ -268,8 +217,7 @@ function indicatorRawValue(id: string): string {
                 <th class="py-2 pr-4 text-right">Pts</th>
                 <th class="py-2 pr-4 text-right">Peso</th>
                 <th class="py-2 pr-4 text-right">Contribuição</th>
-                <th class="py-2 pr-4">Faixa ideal</th>
-                <th class="py-2 text-right">Valor real</th>
+                <th class="py-2">Faixa ideal</th>
               </tr>
             </thead>
             <tbody>
@@ -284,11 +232,7 @@ function indicatorRawValue(id: string): string {
                   :class="d.disponivel ? (d.contribuicao >= 0 ? 'text-green-600' : 'text-red-500') : 'text-gray-400'">
                   {{ d.disponivel ? d.contribuicao.toFixed(1) : "—" }}
                 </td>
-                <td class="py-2 pr-4 text-xs text-gray-400">{{ d.idealRange ?? "—" }}</td>
-                <td class="py-2 text-right text-xs font-mono"
-                  :class="d.disponivel ? 'text-indigo-400 dark:text-indigo-300' : 'text-gray-400'">
-                  {{ indicatorRawValue(d.id) }}
-                </td>
+                <td class="py-2 text-xs text-gray-400">{{ d.idealRange ?? "—" }}</td>
               </tr>
             </tbody>
           </table>
