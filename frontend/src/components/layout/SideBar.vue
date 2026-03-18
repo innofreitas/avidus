@@ -8,6 +8,7 @@ const router = useRouter();
 
 const nav = [
   { path: "/analysis", label: "Análise",       icon: "📈" },
+  { path: "/portfolio", label: "Portfólio",    icon: "💼" },    
   { path: "/settings", label: "Configurações",  icon: "⚙️"  },
 ];
 

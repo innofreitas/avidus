@@ -272,7 +272,8 @@ export function analyzeFundamental(fund: any) {
   };
 
   // Dividend Yield
-  const dyVal = dividendos?.dividendYield != null ? dividendos.dividendYield * 100 : null;
+  //const dyVal = dividendos?.dividendYield != null ? dividendos.dividendYield * 100 : null;
+  const dyVal = dividendos?.dividendYield != null ? dividendos.dividendYield : null;
   const dividendYield = {
     value: dyVal != null ? +dyVal.toFixed(2) : null,
     unit: "%",

@@ -9,6 +9,7 @@ export default createRouter({
       children: [
         { path: "",          redirect: "/analysis" },
         { path: "analysis",  name: "analysis",  component: () => import("@/views/AnalysisView.vue") },
+        { path: "portfolio", name: "portfolio", component: () => import("@/views/PortfolioView.vue") },
         { path: "settings",  name: "settings",  component: () => import("@/views/SettingsView.vue") },
       ],
     },
