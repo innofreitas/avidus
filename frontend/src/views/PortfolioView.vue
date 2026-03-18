@@ -2,9 +2,10 @@
 import { ref, computed, shallowRef } from "vue";
 import * as XLSX from "xlsx";
 import api from "@/utils/api";
-import type { AnalysisResult, ProfileName, ProfileScore } from "@/types";
+import type { AnalysisResult, ProfileName } from "@/types";
 import { PROFILE_LABELS, PROFILE_ICONS, ALL_PROFILES } from "@/types";
 import { decisionColor, decisionBadgeClass, formatNumber } from "@/utils/formatters";
+import AnalysisDetail from "@/components/analysis/AnalysisDetail.vue";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -382,17 +383,6 @@ const tabSummary = computed(() => [
 ]);
 
 // decisão mais recorrente para o badge de resumo
-// Computed tipado para os scores do modal — evita [p as any] no template
-const modalScores = computed((): { profile: ProfileName; icon: string; label: string; score: ProfileScore | null }[] => {
-  const res = modalResult.value;
-  if (!res) return [];
-  return ALL_PROFILES.map((p) => ({
-    profile: p,
-    icon:    PROFILE_ICONS[p],
-    label:   PROFILE_LABELS[p],
-    score:   res.scores[p] ?? null,
-  }));
-});
 
 function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: string; color: string } | null {
   const r = rec?.result;
@@ -529,7 +519,7 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
               <th class="py-2 pr-3 text-right">Quantidade</th>
               <th class="py-2 pr-3 text-right">Preço Fechamento</th>
               <th class="py-2 pr-3 text-right">Valor Atualizado</th>
-              <th class="py-2 min-w-[200px]">Recomendação</th>
+              <th class="py-2 min-w-[280px]">Recomendação</th>
             </tr>
           </thead>
           <tbody>
@@ -557,15 +547,47 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                   </span>
                 </div>
                 <!-- Resultado -->
-                <div v-else-if="row.recomendacao?.result" class="flex items-center gap-2">
-                  <span :class="['badge', decisionBadgeClass(row.recomendacao.result.scores?.MODERADO?.decision ?? '')]">
-                    {{ row.recomendacao.result.scores?.MODERADO?.emoji }}
-                    {{ row.recomendacao.result.scores?.MODERADO?.decision?.replace(/_/g, " ") }}
-                  </span>
+                <div v-else-if="row.recomendacao?.result" class="flex items-start gap-2">
+                  <!-- Badges por perfil + analistas -->
+                  <div class="flex flex-col gap-1 flex-1">
+                    <!-- 4 perfis -->
+                    <div v-for="p in ALL_PROFILES" :key="p" class="flex items-center gap-1.5">
+                      <span class="text-gray-400 w-20 text-xs truncate flex-shrink-0">
+                        {{ PROFILE_ICONS[p] }} {{ PROFILE_LABELS[p] }}
+                      </span>
+                      <span v-if="row.recomendacao.result.scores?.[p]"
+                        :class="['badge text-xs', decisionBadgeClass(row.recomendacao.result.scores[p].decision)]">
+                        {{ row.recomendacao.result.scores[p].emoji }}
+                        {{ row.recomendacao.result.scores[p].decision.replace(/_/g, " ") }}
+                      </span>
+                      <span v-else class="text-xs text-gray-400">—</span>
+                    </div>
+                    <!-- Analistas -->
+                    <div v-if="row.recomendacao.result.recommendations?.available"
+                      class="flex items-center gap-1.5 mt-0.5 pt-1 border-t border-gray-100 dark:border-gray-700">
+                      <span class="text-gray-400 w-20 text-xs flex-shrink-0">🏦 Analistas</span>
+                      <span class="text-xs font-semibold"
+                        :style="{ color: row.recomendacao.result.recommendations.currentClassify?.color }">
+                        {{ row.recomendacao.result.recommendations.currentClassify?.label }}
+                      </span>
+                      <span class="text-xs text-gray-400">
+                        ({{ row.recomendacao.result.recommendations.numberOfAnalystOpinions }})
+                      </span>
+                    </div>
+                  </div>
+                  <!-- Botão ver detalhes -->
                   <button @click="openModal(row.recomendacao, row.codigo)"
-                    class="text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300
-                           underline underline-offset-2 flex items-center gap-1">
-                    Ver detalhes →
+                    title="Ver detalhes"
+                    class="flex-shrink-0 p-1.5 rounded-lg text-indigo-500 hover:text-indigo-700
+                           hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors mt-0.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                           -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
                   </button>
                 </div>
                 <!-- Sem análise -->
@@ -800,115 +822,9 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
               </button>
             </div>
 
-            <!-- Body -->
-            <div v-if="modalResult" class="p-5 space-y-6 max-h-[75vh] overflow-y-auto">
-
-              <!-- Preço -->
-              <div class="flex items-center gap-4 flex-wrap">
-                <div>
-                  <p class="text-xs text-gray-400">Preço</p>
-                  <p class="text-3xl font-black tabular-nums">
-                    {{ modalResult.meta.currency === "USD" ? "US$" : "R$" }}
-                    {{ formatNumber(modalResult.technical?.price ?? null) }}
-                  </p>
-                </div>
-                <div v-if="modalResult.technical?.dataRange" class="text-xs text-gray-400">
-                  {{ modalResult.technical.dataRange.from }} → {{ modalResult.technical.dataRange.to }}
-                </div>
-              </div>
-
-              <!-- Scores por perfil -->
-              <div>
-                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Score por Perfil</p>
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div v-for="entry in modalScores" :key="entry.profile"
-                    class="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                    <p class="text-xs text-gray-400 mb-1">
-                      {{ entry.icon }} {{ entry.label }}
-                    </p>
-                    <div v-if="entry.score">
-                      <div class="flex items-center gap-2 mb-1">
-                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div class="h-2 rounded-full transition-all"
-                            :style="{ width: entry.score.score + '%', backgroundColor: decisionColor(entry.score.decision) }" />
-                        </div>
-                        <span class="text-sm font-bold tabular-nums"
-                          :style="{ color: decisionColor(entry.score.decision) }">
-                          {{ entry.score.score.toFixed(1) }}
-                        </span>
-                      </div>
-                      <span :class="['badge', decisionBadgeClass(entry.score.decision)]">
-                        {{ entry.score.emoji }}
-                        {{ entry.score.decision.replace(/_/g, " ") }}
-                      </span>
-                    </div>
-                    <p v-else class="text-xs text-gray-400">Sem dados</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Fundamentalista -->
-              <div v-if="modalResult.fundamental" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div v-for="(item, label) in {
-                  'P/L':          { v: modalResult.fundamental.pl?.value,             u: 'x'   },
-                  'P/VP':         { v: modalResult.fundamental.pvp?.value,            u: 'x'   },
-                  'ROE':          { v: modalResult.fundamental.roe?.value,            u: '%'   },
-                  'Margem Líq.':  { v: modalResult.fundamental.margemLiquida?.value,  u: '%'   },
-                  'Dív./EBITDA':  { v: modalResult.fundamental.dividaEbitda?.value,   u: 'x'   },
-                  'Cresc. Lucro': { v: modalResult.fundamental.earningsGrowth?.value, u: '%a.a.' },
-                  'Div. Yield':   { v: modalResult.fundamental.dividendYield?.value,  u: '%'   },
-                  'Beta':         { v: modalResult.fundamental.beta?.value,           u: ''    },
-                }" :key="label"
-                  class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p class="text-xs text-gray-400">{{ label }}</p>
-                  <p class="font-bold tabular-nums">
-                    {{ item.v != null ? `${item.v}${item.u}` : "N/A" }}
-                  </p>
-                </div>
-              </div>
-
-              <!-- Técnica resumida -->
-              <div v-if="modalResult.technical" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p class="text-xs text-gray-400">RSI (14)</p>
-                  <p class="font-bold tabular-nums">{{ modalResult.technical.rsi?.value ?? "N/A" }}</p>
-                  <p class="text-xs text-gray-500 truncate">{{ modalResult.technical.rsi?.interpretation }}</p>
-                </div>
-                <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p class="text-xs text-gray-400">Tendência</p>
-                  <p class="font-bold">{{ modalResult.technical.trend?.label }}</p>
-                </div>
-                <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p class="text-xs text-gray-400">Volatilidade</p>
-                  <p class="font-bold tabular-nums">{{ modalResult.technical.volatility?.annualizedPct ?? "N/A" }}%</p>
-                </div>
-                <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p class="text-xs text-gray-400">Drawdown Máx.</p>
-                  <p class="font-bold text-red-500 tabular-nums">{{ modalResult.technical.maxDrawdown?.maxDrawdownPct ?? "N/A" }}%</p>
-                </div>
-              </div>
-
-              <!-- Preço Justo -->
-              <div v-if="modalResult.fairPrice" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div v-for="(model, name) in {
-                  Graham: modalResult.fairPrice.graham,
-                  Bazin:  modalResult.fairPrice.bazin,
-                  Consenso: modalResult.fairPrice.consenso
-                }" :key="name" class="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <p class="text-xs text-gray-400 mb-1">{{ name }}</p>
-                  <template v-if="model?.price">
-                    <p class="font-black tabular-nums">
-                      {{ modalResult.meta.currency === "USD" ? "US$" : "R$" }}
-                      {{ formatNumber(model.price) }}
-                    </p>
-                    <p :class="[(model.upside ?? 0) >= 0 ? 'text-green-600' : 'text-red-500', 'text-xs font-semibold']">
-                      {{ (model.upside ?? 0) >= 0 ? "+" : "" }}{{ model.upside?.toFixed(1) }}% upside
-                    </p>
-                  </template>
-                  <p v-else class="text-sm text-gray-400">N/A</p>
-                </div>
-              </div>
-
+            <!-- Body — usa o mesmo componente da AnalysisView -->
+            <div v-if="modalResult" class="p-5 overflow-y-auto max-h-[80vh]">
+              <AnalysisDetail :result="modalResult" />
             </div><!-- /body -->
           </div><!-- /modal -->
         </div>
