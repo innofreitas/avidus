@@ -6,6 +6,7 @@ import type { AnalysisResult, ProfileName } from "@/types";
 import { PROFILE_LABELS, PROFILE_ICONS, ALL_PROFILES } from "@/types";
 import { decisionColor, decisionBadgeClass, formatNumber } from "@/utils/formatters";
 import AnalysisDetail from "@/components/analysis/AnalysisDetail.vue";
+import AnalysisBarsi from "@/components/analysis/AnalysisBarsi.vue";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ const filterTD     = ref("");
 const modalResult  = shallowRef<AnalysisResult | null>(null);
 const modalTicker  = ref("");
 const showModal    = ref(false);
+const showBarsi    = ref(false);
 
 const activeTab    = ref<"acoes" | "etf" | "fundos" | "renda_fixa" | "tesouro">("acoes");
 
@@ -524,10 +526,18 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
           :disabled="analisando || !acoes.length"
           class="btn-primary text-sm flex items-center gap-2">
           <span v-if="analisando" class="animate-spin">⏳</span>
-          <span v-else">🔍</span>
+          <span v-else>🔍</span>
           {{ analisando
             ? `Analisando ${analisandoIdx !== null ? analisandoIdx + 1 : ''}/${acoes.length}...`
             : "Analisar Todos" }}
+        </button>
+        <!-- Botão Análise Barsi -->
+        <button @click="showBarsi = true"
+          :disabled="!acoes.some(r => r.recomendacao?.result != null)"
+          class="btn-secondary text-sm flex items-center gap-2 border border-amber-400 dark:border-amber-600
+                 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40
+                 disabled:opacity-40 disabled:cursor-not-allowed">
+          🎯 Análise Barsi
         </button>
       </div>
 
@@ -883,6 +893,14 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
     </Teleport>
 
   </div>
+
+    <!-- ── Modal Análise Barsi ─────────────────────────────── -->
+    <AnalysisBarsi
+      v-if="showBarsi"
+      :acoes="acoes"
+      @close="showBarsi = false"
+    />
+
 </template>
 
 <style scoped>
