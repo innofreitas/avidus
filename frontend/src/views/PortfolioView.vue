@@ -349,11 +349,32 @@ function openModal(rec: RecomendacaoState, ticker: string) {
 }
 function closeModal() { showModal.value = false; modalResult.value = null; }
 
-// ─── Filtros ──────────────────────────────────────────────────
+// ─── Filtros + Ordenação ─────────────────────────────────────
 
-const filteredAcoes  = computed(() => acoes.value.filter(r =>
-  !filterAcoes.value || r.produto.toLowerCase().includes(filterAcoes.value.toLowerCase()) ||
-  r.codigo.toLowerCase().includes(filterAcoes.value.toLowerCase())));
+// Ordenação da tabela de Ações pela coluna Pontuação
+const sortAcoes = ref<"asc" | "desc" | null>(null);
+
+/** Somatório dos scores dos 4 perfis. Rows sem análise retornam null. */
+function pontuacao(row: AcaoRow): number | null {
+  const scores = row.recomendacao?.result?.scores;
+  if (!scores) return null;
+  const vals = (["GENERICO","CONSERVADOR","MODERADO","AGRESSIVO"] as const)
+    .map(p => scores[p]?.score ?? null)
+    .filter((v): v is number => v != null);
+  return vals.length ? +(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
+}
+
+const filteredAcoes  = computed(() => {
+  const list = acoes.value.filter(r =>
+    !filterAcoes.value || r.produto.toLowerCase().includes(filterAcoes.value.toLowerCase()) ||
+    r.codigo.toLowerCase().includes(filterAcoes.value.toLowerCase()));
+  if (!sortAcoes.value) return list;
+  return [...list].sort((a, b) => {
+    const pa = pontuacao(a) ?? -Infinity;
+    const pb = pontuacao(b) ?? -Infinity;
+    return sortAcoes.value === "asc" ? pa - pb : pb - pa;
+  });
+});
 const filteredEtfs   = computed(() => etfs.value.filter(r =>
   !filterEtf.value || r.produto.toLowerCase().includes(filterEtf.value.toLowerCase()) ||
   r.codigo.toLowerCase().includes(filterEtf.value.toLowerCase())));
@@ -519,7 +540,18 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
               <th class="py-2 pr-3 text-right">Quantidade</th>
               <th class="py-2 pr-3 text-right">Preço Fechamento</th>
               <th class="py-2 pr-3 text-right">Valor Atualizado</th>
-              <th class="py-2 min-w-[280px]">Recomendação</th>
+              <th class="py-2 pr-3 min-w-[280px]">Recomendação</th>
+              <th class="py-2 text-right min-w-[110px] select-none">
+                <button @click="sortAcoes = sortAcoes === 'desc' ? 'asc' : 'desc'"
+                  class="flex items-center gap-1 ml-auto hover:text-indigo-400 transition-colors group"
+                  title="Ordenar por pontuação">
+                  Pontuação
+                  <span class="text-xs">
+                    <span :class="sortAcoes === 'desc' ? 'text-indigo-400' : 'text-gray-500 group-hover:text-indigo-300'">▼</span>
+                    <span :class="sortAcoes === 'asc'  ? 'text-indigo-400' : 'text-gray-500 group-hover:text-indigo-300'">▲</span>
+                  </span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -593,6 +625,24 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                 <!-- Sem análise -->
                 <span v-else class="text-xs text-gray-300 dark:text-gray-600">—</span>
               </td>
+              <!-- Pontuação -->
+              <td class="py-2 text-right align-top">
+                <template v-if="pontuacao(row) != null">
+                  <span class="text-sm font-black tabular-nums"
+                    :style="{ color: pontuacao(row)! >= 75 ? '#16a34a' : pontuacao(row)! >= 55 ? '#22c55e' : pontuacao(row)! >= 35 ? '#eab308' : '#ef4444' }">
+                    {{ pontuacao(row)!.toFixed(1) }}
+                  </span>
+                  <div class="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 mt-1">
+                    <div class="h-1.5 rounded-full transition-all"
+                      :style="{
+                        width: Math.min(pontuacao(row)!, 100) + '%',
+                        backgroundColor: pontuacao(row)! >= 75 ? '#16a34a' : pontuacao(row)! >= 55 ? '#22c55e' : pontuacao(row)! >= 35 ? '#eab308' : '#ef4444'
+                      }" />
+                  </div>
+                  <span class="text-xs text-gray-400">/ 400</span>
+                </template>
+                <span v-else class="text-xs text-gray-300 dark:text-gray-600">—</span>
+              </td>
             </tr>
             <!-- Rodapé totalizador -->
             <tr class="border-t-2 border-gray-200 dark:border-gray-700 font-bold text-sm bg-gray-50 dark:bg-gray-800/30">
@@ -600,6 +650,7 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
               <td class="py-2 pr-3 text-right tabular-nums text-indigo-600 dark:text-indigo-400">
                 {{ fmtCurrency(totalAcoes) }}
               </td>
+              <td></td>
               <td></td>
             </tr>
           </tbody>
