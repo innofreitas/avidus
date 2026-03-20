@@ -272,8 +272,7 @@ export function analyzeFundamental(fund: any) {
   };
 
   // Dividend Yield
-  //const dyVal = dividendos?.dividendYield != null ? dividendos.dividendYield * 100 : null;
-  const dyVal = dividendos?.dividendYield != null ? dividendos.dividendYield : null;
+  const dyVal = dividendos?.dividendYield != null ? dividendos.dividendYield * 100 : null;
   const dividendYield = {
     value: dyVal != null ? +dyVal.toFixed(2) : null,
     unit: "%",
@@ -340,11 +339,11 @@ function classifyUpside(upside: number | null) {
   return               { label: "🔴 Muito caro",               desc: "Preço muito acima do justo"          };
 }
 
-export function analyzeFairPrice(valuation: any, price: number) {
+export function analyzeFairPrice(valuation: any, price: number, dividendos?: any) {
   const lpa = valuation?.trailingEps  ?? null;
   const vpa = valuation?.bookValue    ?? null;
-  const dpa = valuation?.dividendRate ?? null;
-
+ 
+  // Graham — usa LPA e VPA
   let graham: any;
   if (lpa == null || vpa == null) graham = { price: null, upside: null, valid: false, reason: "LPA ou VPA não disponíveis" };
   else if (lpa <= 0) graham = { price: null, upside: null, valid: false, reason: `LPA negativo (${lpa.toFixed(2)})` };
@@ -353,23 +352,28 @@ export function analyzeFairPrice(valuation: any, price: number) {
     const pj = Math.sqrt(22.5 * lpa * vpa);
     graham = { price: +pj.toFixed(2), upside: +((pj / price - 1) * 100).toFixed(2), valid: true, reason: `√(22.5 × ${lpa.toFixed(2)} × ${vpa.toFixed(2)})` };
   }
-
+ 
+  // Bazin — usa trailingAnnualDividendRate (dividendo real pago nos últimos 12 meses)
+  // Fórmula: preçoJusto = trailingAnnualDividendRate / 0.06
+  // Fonte: quote.trailingAnnualDividendRate (yahoo-finance2)
+  const dividend12m = dividendos?.trailingAnnualDividendRate ?? valuation?.dividendRate ?? null;
   let bazin: any;
-  if (!dpa || dpa <= 0) bazin = { price: null, upside: null, valid: false, reason: dpa == null ? "DPA não disponível" : "DPA = 0" };
-  else {
-    const pt = dpa / 0.06;
-    bazin = { price: +pt.toFixed(2), upside: +((pt / price - 1) * 100).toFixed(2), valid: true, reason: `${dpa.toFixed(4)} / 6%` };
+  if (!dividend12m || dividend12m <= 0) {
+    bazin = { price: null, upside: null, valid: false, reason: dividend12m == null ? "Dividendo 12m não disponível" : "Dividendo 12m = 0" };
+  } else {
+    const pt = dividend12m / 0.06;
+    bazin = { price: +pt.toFixed(2), upside: +((pt / price - 1) * 100).toFixed(2), valid: true, reason: `${dividend12m.toFixed(4)} / 6%` };
   }
-
+ 
   graham.classification = classifyUpside(graham.upside);
   bazin.classification  = classifyUpside(bazin.upside);
-
+ 
   const validPrices = [graham, bazin].filter((m) => m.valid).map((m) => m.price);
-  const consensoPrice = validPrices.length ? +(validPrices.reduce((a, b) => a + b, 0) / validPrices.length).toFixed(2) : null;
+  const consensoPrice  = validPrices.length ? +(validPrices.reduce((a, b) => a + b, 0) / validPrices.length).toFixed(2) : null;
   const consensoUpside = consensoPrice ? +((consensoPrice / price - 1) * 100).toFixed(2) : null;
   const consenso = { price: consensoPrice, upside: consensoUpside, modelsUsed: validPrices.length, classification: classifyUpside(consensoUpside) };
-
-  return { inputs: { lpa, vpa, dpa }, graham, bazin, consenso };
+ 
+  return { inputs: { lpa, vpa, dividend12m }, graham, bazin, consenso };
 }
 
 // ─── Recomendações ────────────────────────────────────────────
@@ -539,7 +543,7 @@ export async function analyzeStock(rawData: Record<string, unknown>): Promise<Re
     catch (e: any) { console.error("❌ analyzeFundamental:", e.message); }
   }
 
-  const fairPrice = tech && fund ? analyzeFairPrice((fundamental as any).valuation, tech.price) : null;
+  const fairPrice = tech && fund ? analyzeFairPrice((fundamental as any).valuation, tech.price, (fundamental as any).dividendos) : null;
   const recs      = analyzeRecommendations(recommendations);
 
   const profiles: InvestorProfile[] = ["GENERICO", "CONSERVADOR", "MODERADO", "AGRESSIVO"];

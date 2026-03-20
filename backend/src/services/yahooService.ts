@@ -1,16 +1,35 @@
 // @ts-ignore
 import YahooFinance from "yahoo-finance2";
+import { reconcileFundamentals } from "./scraperService";
 
 // Singleton — obrigatório no yahoo-finance2 v3
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
-// ─── Helper ───────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────
+
 function n(v: any): number | null {
   if (v == null) return null;
   if (typeof v === "number") return isFinite(v) ? v : null;
   if (typeof v === "object" && "raw" in v) return n(v.raw);
   if (typeof v === "string") { const x = parseFloat(v); return isFinite(x) ? x : null; }
   return null;
+}
+
+/**
+ * Normaliza dividendYield para RATIO (0-1) independente da fonte:
+ *   quote.dividendYield  (Yahoo /quote v8)     -> ja em %  -> ex: 5.2  -> divide por 100 -> 0.052
+ *   sd.dividendYield     (Yahoo /quoteSummary) -> ratio    -> ex: 0.052 -> usa direto
+ *
+ * Heuristica: se o valor for >= 0.5 assume que veio em % e divide por 100.
+ * DY acima de 50% como ratio seria absurdo; como % seria incomum mas possivel.
+ * O threshold 0.5 cobre 99.9% dos casos reais.
+ */
+function normalizeDY(fromQuote: number | null, fromSD: number | null): number | null {
+  // Prefere summaryDetail — ja vem em ratio, sem ambiguidade
+  if (fromSD != null) return fromSD;
+  if (fromQuote == null) return null;
+  // quote.dividendYield vem em % -> converte para ratio
+  return fromQuote >= 0.5 ? fromQuote / 100 : fromQuote;
 }
 
 // ─── Busca de dados ───────────────────────────────────────────
@@ -158,7 +177,7 @@ function latestFin(financials: any[] | null, field: string): number | null {
   return n(sorted[0]?.[field]);
 }
 
-function buildFundamental(quote: any, qs: any, ts: any) {
+async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
   const dks = qs?.defaultKeyStatistics ?? {};
   const fd  = qs?.financialData        ?? {};
   const sd  = qs?.summaryDetail        ?? {};
@@ -192,23 +211,37 @@ function buildFundamental(quote: any, qs: any, ts: any) {
   // Série histórica de lucro líquido (fundamentalsTimeSeries v3)
   const netIncomeAnual = extractNetIncomeSeries(fin);
 
-  // Calcular crescimento de lucro YoY a partir da série histórica (mais confiável)
-  // Fallback: financialData.earningsGrowth (crescimento trimestral recente)
+  // ── Crescimento de lucro YoY ────────────────────────────────────────────────
+  // Cadeia de prioridade:
+  //
+  //  1. financialData.earningsGrowth  (quoteSummary.financialData)
+  //     Crescimento YoY calculado pelo próprio Yahoo Finance (TTM vs TTM anterior).
+  //     Mais confiável: Yahoo usa metodologia consistente e trata anos negativos.
+  //     Retorna RATIO (ex: 0.18 = +18%).
+  //
+  //  2. earningsTrend["0y"].growthActual  (quoteSummary.earningsTrend)
+  //     trend.growth do período "0y" = crescimento do EPS do ano corrente vs anterior.
+  //     Usado quando financialData.earningsGrowth não está disponível.
+  //     Retorna RATIO (ex: 0.18 = +18%).
+  //
+  // NOTA: fundamentalsTimeSeries NÃO é usado para calcular crescimento.
+  // Os valores absolutos de netIncome da série podem produzir crescimentos
+  // distorcidos quando um ano-base teve lucro muito baixo ou negativo
+  // (ex: lucro de 0.1B → 0.8B = +700% matematicamente correto mas enganoso).
+  // A série histórica (netIncomeAnual) é mantida apenas para exibição no frontend.
+  // ──────────────────────────────────────────────────────────────────────────────
   let earningsGrowthYoY: number | null = null;
-  if (netIncomeAnual.length >= 2) {
-    const last = netIncomeAnual.at(-1)!.value;
-    const prev = netIncomeAnual.at(-2)!.value;
-    if (prev !== 0 && prev != null && last != null) {
-      earningsGrowthYoY = (last - prev) / Math.abs(prev);
-    }
+  let earningsGrowthSource = "none";
+
+  // 1ª opção: financialData.earningsGrowth — ratio calculado pelo Yahoo, mais confiável
+  if (n(fd?.earningsGrowth) != null) {
+    earningsGrowthYoY = n(fd?.earningsGrowth);
+    earningsGrowthSource = "financialData.earningsGrowth";
   }
-  // fallback: earningsTrend["0y"].growthActual → crescimento do ano atual vs anterior
+  // 2ª opção: earningsTrend["0y"].growthActual
   if (earningsGrowthYoY == null && earningsTrend["0y"]?.growthActual != null) {
     earningsGrowthYoY = earningsTrend["0y"].growthActual;
-  }
-  // último fallback: financialData.earningsGrowth (trimestral)
-  if (earningsGrowthYoY == null) {
-    earningsGrowthYoY = n(fd?.earningsGrowth);
+    earningsGrowthSource = "earningsTrend[0y].growthActual";
   }
 
   // EBITDA: preferir série histórica, cair para quoteSummary
@@ -221,48 +254,121 @@ function buildFundamental(quote: any, qs: any, ts: any) {
                   ?? latestBS(bs, "cashCashEquivalentsAndShortTermInvestments")
                   ?? n(fd?.totalCash);
 
-  console.log(`  [yahoo] PE=${n(quote?.trailingPE ?? sd?.trailingPE)}, ROE=${n(fd?.returnOnEquity)}, DY=${n(quote?.dividendYield ?? sd?.dividendYield)}, beta=${n(quote?.beta ?? sd?.beta)}, netIncomeEntries=${netIncomeAnual.length}, earningsGrowthYoY=${earningsGrowthYoY != null ? (earningsGrowthYoY * 100).toFixed(1) + "%" : "null"}`);
+  const dyNorm = normalizeDY(n(quote?.dividendYield), n(sd?.dividendYield));
+  console.log(`  [yahoo] PE=${n(quote?.trailingPE ?? sd?.trailingPE)}, ROE=${n(fd?.returnOnEquity)}, DY(ratio)=${dyNorm?.toFixed(4)}, beta=${n(quote?.beta ?? sd?.beta)}`);
+  console.log(`  [yahoo] earningsGrowthYoY=${earningsGrowthYoY != null ? (earningsGrowthYoY * 100).toFixed(1) + "%" : "null"} [fonte: ${earningsGrowthSource}]`);
+
+  // ── Valores base do Yahoo antes da reconciliação ─────────────────────────
+  const yahooValues = {
+    price:         n(quote?.regularMarketPrice),
+    pl:            n(quote?.trailingPE  ?? sd?.trailingPE  ?? dks?.forwardPE),
+    pvp:           n(dks?.priceToBook   ?? quote?.priceToBook),
+    dy:            dyNorm,
+    payout:        n(quote?.payoutRatio ?? sd?.payoutRatio),
+    margemLiquida: n(fd?.profitMargins  ?? quote?.profitMargins),
+    roe:           n(fd?.returnOnEquity),
+    roa:           n(fd?.returnOnAssets),
+    liqCorrente:   n(fd?.currentRatio),
+    pegRatio:      n(dks?.pegRatio      ?? dks?.trailingPegRatio),
+    dividaEbitda:  (totalDebt != null && ebitda != null && ebitda !== 0)
+                   ? totalDebt / ebitda : null,
+  };
+
+  // ── Scraping e reconciliação com fontes externas ─────────────────────────
+  // Apenas para tickers brasileiros (.SA) — fontes só cobrem B3
+  let rec: Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }> = {};
+  if (ticker.toUpperCase().endsWith(".SA")) {
+    try {
+      rec = await reconcileFundamentals(ticker, yahooValues);
+    } catch (e) {
+      console.warn(`  [scraper] ⚠️  reconcileFundamentals falhou: ${(e as Error).message}`);
+    }
+  }
+
+  // Helper: usa valor reconciliado se disponível, senão mantém o Yahoo
+  const R = (key: keyof typeof yahooValues): number | null =>
+    rec[key] !== undefined ? rec[key].final : yahooValues[key];
+
+  /**
+   * Monta o objeto de rastreabilidade de fontes para um campo reconciliável.
+   * Sempre incluído no retorno — independente de ter sido substituído ou não —
+   * para que o rawData no banco registre de onde cada valor veio.
+   *
+   * Estrutura:
+   *   { yahooFinance: number|null, investidor10: number|null,
+   *     fundamentus: number|null, statusinvest: number|null,
+   *     final: number|null, changed: boolean }
+   */
+  const S = (key: keyof typeof yahooValues) => {
+    const entry = rec[key];
+    const srcArr = entry?.sources ?? [];
+    const bySource = Object.fromEntries(srcArr.map(s => [s.source, s.value])) as Record<string, number | null>;
+    return {
+      yahooFinance: yahooValues[key] ?? null,
+      investidor10: bySource["investidor10"] ?? null,
+      fundamentus:  bySource["fundamentus"]  ?? null,
+      statusinvest: bySource["statusinvest"] ?? null,
+      final:        R(key),
+      changed:      entry?.changed ?? false,
+    };
+  };
 
   return {
     valuation: {
-      trailingPE:   n(quote?.trailingPE  ?? sd?.trailingPE  ?? dks?.forwardPE),
-      forwardPE:    n(dks?.forwardPE     ?? quote?.forwardPE),
-      priceToBook:  n(dks?.priceToBook   ?? quote?.priceToBook),
-      trailingEps:  n(dks?.trailingEps),
-      bookValue:    n(dks?.bookValue),
-      pegRatio:     n(dks?.pegRatio      ?? dks?.trailingPegRatio),
-      dividendRate: n(sd?.dividendRate   ?? quote?.dividendRate),
+      trailingPE:          R("pl"),
+      trailingPE_sources:  S("pl"),
+      forwardPE:           n(dks?.forwardPE ?? quote?.forwardPE),
+      priceToBook:         R("pvp"),
+      priceToBook_sources: S("pvp"),
+      trailingEps:         n(dks?.trailingEps),
+      bookValue:           n(dks?.bookValue),
+      pegRatio:            R("pegRatio"),
+      pegRatio_sources:    S("pegRatio"),
+      dividendRate:        n(sd?.dividendRate ?? quote?.dividendRate),
     },
     rentabilidade: {
-      returnOnEquity:    n(fd?.returnOnEquity),
-      returnOnAssets:    n(fd?.returnOnAssets),
-      profitMargins:     n(fd?.profitMargins  ?? quote?.profitMargins),
-      grossMargins:      n(fd?.grossMargins),
-      operatingMargins:  n(fd?.operatingMargins),
+      returnOnEquity:           R("roe"),
+      returnOnEquity_sources:   S("roe"),
+      returnOnAssets:           R("roa"),
+      returnOnAssets_sources:   S("roa"),
+      profitMargins:            R("margemLiquida"),
+      profitMargins_sources:    S("margemLiquida"),
+      grossMargins:             n(fd?.grossMargins),
+      operatingMargins:         n(fd?.operatingMargins),
     },
     divida: {
       totalDebt,
       totalCash,
       ebitda,
-      debtToEquity:      n(fd?.debtToEquity),
-      currentRatio:      n(fd?.currentRatio),
-      quickRatio:        n(fd?.quickRatio),
-      freeCashflow:      n(fd?.freeCashflow),
-      operatingCashflow: n(fd?.operatingCashflow),
+      debtToEquity:             n(fd?.debtToEquity),
+      currentRatio:             R("liqCorrente"),
+      currentRatio_sources:     S("liqCorrente"),
+      dividaEbitda:             R("dividaEbitda"),
+      dividaEbitda_sources:     S("dividaEbitda"),
+      quickRatio:               n(fd?.quickRatio),
+      freeCashflow:             n(fd?.freeCashflow),
+      operatingCashflow:        n(fd?.operatingCashflow),
     },
     crescimento: {
       netIncomeAnual,
-      earningsGrowthYoY,                    // calculado da série histórica ou earningsTrend["0y"]
+      earningsGrowthYoY,
       revenueGrowthYoY:  n(fd?.revenueGrowth),
-      earningsTrend,                         // mapa por período: "0q", "+1q", "0y", "+1y"
+      earningsTrend,
     },
     dividendos: {
-      dividendYield:  n(quote?.dividendYield ?? sd?.dividendYield),
-      dividendRate:   n(sd?.dividendRate     ?? quote?.dividendRate),
-      payoutRatio:    n(quote?.payoutRatio   ?? sd?.payoutRatio),
-      exDividendDate: sd?.exDividendDate     ?? null,
+      dividendYield:         R("dy"),
+      dividendYield_sources: S("dy"),
+      dividendRate:          n(sd?.dividendRate ?? quote?.dividendRate),
+      // trailingAnnualDividendRate: dividendo real pago nos últimos 12 meses (R$/ação)
+      // Usado no cálculo de Bazin: preçoJusto = trailingAnnualDividendRate / 0.06
+      trailingAnnualDividendRate: n(quote?.trailingAnnualDividendRate),
+      payoutRatio:           R("payout"),
+      payoutRatio_sources:   S("payout"),
+      exDividendDate:        sd?.exDividendDate ?? null,
     },
     risco: { beta: n(quote?.beta ?? sd?.beta) },
+    // ── Rastreabilidade de preço ─────────────────────────────
+    preco_sources: S("price"),
   };
 }
 
@@ -335,7 +441,7 @@ export async function fetchAllData(rawTicker: string): Promise<Record<string, un
       fetchedAt: new Date().toISOString(),
     },
     technical,
-    fundamental:     buildFundamental(quote, qs, ts),
+    fundamental:     await buildFundamental(ticker, quote, qs, ts),
     recommendations: buildRecommendations(quote, qs),
   };
 }

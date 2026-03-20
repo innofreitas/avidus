@@ -17,9 +17,11 @@ async function analyze(forceTicker?: string) {
 async function refresh() {
   if (!store.result) return;
   refreshing.value = true;
+  // remove o sufixo '.SA' para nao salvar o ticker com o sufixo no BD
+  const ticker = store.result.meta.ticker.replace(/\.SA$/i, "");
   try {
-    await store.invalidateCache(store.result.meta.ticker);
-    await store.analyze(store.result.meta.ticker);
+    await store.invalidateCache(ticker);
+    await store.analyze(ticker);
   } finally {
     refreshing.value = false;
   }
