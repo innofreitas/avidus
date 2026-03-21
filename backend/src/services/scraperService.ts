@@ -21,9 +21,11 @@ export interface ScrapedFundamentals {
   margemLiquida?: number | null;
   roe?:           number | null;
   roa?:           number | null;
+  roic?:          number | null;   // ratio 0-1
   liqCorrente?:   number | null;
   pegRatio?:      number | null;
   dividaEbitda?:  number | null;
+  evEbit?:        number | null;   // valor absoluto
 }
 
 // ─── HTTP client ──────────────────────────────────────────────
@@ -102,12 +104,15 @@ const I10_MAP: Record<string, string> = {
   "MARGEM LIQUIDA":          "margemLiquida",
   "ROE":                     "roe",
   "ROA":                     "roa",
+  "ROIC":                    "roic",
   "LIQUIDEZ CORRENTE":       "liqCorrente",
   "LIQ. CORRENTE":           "liqCorrente",
   "DÍVIDA LÍQUIDA/EBITDA":   "dividaEbitda",
   "DÍVIDA LÍQUIDA / EBITDA": "dividaEbitda",
+  "EV/EBIT":                 "evEbit",
+  "EV / EBIT":               "evEbit",
 };
-const I10_PCT = new Set(["dy", "payout", "margemLiquida", "roe", "roa"]);
+const I10_PCT = new Set(["dy", "payout", "margemLiquida", "roe", "roa", "roic"]);
 
 export async function scrapeInvestidor10(ticket: string): Promise<ScrapedFundamentals | null> {
   const bare = ticket.replace(/\.SA$/i, "").toUpperCase();
@@ -148,8 +153,10 @@ export async function scrapeInvestidor10(ticket: string): Promise<ScrapedFundame
     margemLiquida: record["margemLiquida"] ?? null,
     roe:           record["roe"]           ?? null,
     roa:           record["roa"]           ?? null,
+    roic:          record["roic"]          ?? null,
     liqCorrente:   record["liqCorrente"]   ?? null,
     dividaEbitda:  record["dividaEbitda"]  ?? null,
+    evEbit:        record["evEbit"]        ?? null,
   };
 }
 
@@ -169,9 +176,12 @@ const FUND_MAP: Record<string, { key: string; pct: boolean }> = {
   "marg. liquida":  { key: "margemLiquida", pct: true  },
   "roe":            { key: "roe",           pct: true  },
   "roa":            { key: "roa",           pct: true  },
+  "roic":           { key: "roic",          pct: true  },
   "liq. corrente":  { key: "liqCorrente",   pct: false },
   "liquidez corr":  { key: "liqCorrente",   pct: false },
   "liquidez corr.": { key: "liqCorrente",   pct: false },
+  "ev/ebit":        { key: "evEbit",        pct: false },
+  "ev / ebit":      { key: "evEbit",        pct: false },
 };
 
 export async function scrapeFundamentus(ticket: string): Promise<ScrapedFundamentals | null> {
@@ -214,7 +224,9 @@ export async function scrapeFundamentus(ticket: string): Promise<ScrapedFundamen
     margemLiquida: record["margemLiquida"] ?? null,
     roe:           record["roe"]           ?? null,
     roa:           record["roa"]           ?? null,
+    roic:          record["roic"]          ?? null,
     liqCorrente:   record["liqCorrente"]   ?? null,
+    evEbit:        record["evEbit"]        ?? null,
   };
 }
 
@@ -241,8 +253,11 @@ const SI_MAP: Record<string, { key: string; pct: boolean }> = {
   "dívida líquida/ebitda": { key: "dividaEbitda",  pct: false },
   "roe":                   { key: "roe",           pct: true  },
   "roa":                   { key: "roa",           pct: true  },
+  "roic":                  { key: "roic",          pct: true  },
   "liq. corrente":         { key: "liqCorrente",   pct: false },
   "liquidez corrente":     { key: "liqCorrente",   pct: false },
+  "ev/ebit":               { key: "evEbit",        pct: false },
+  "ev / ebit":             { key: "evEbit",        pct: false },
 };
 
 const cleanTitle = (raw: string | undefined) =>
@@ -309,9 +324,11 @@ export async function scrapeStatusInvest(ticket: string): Promise<ScrapedFundame
     margemLiquida: record["margemLiquida"] ?? null,
     roe:           record["roe"]           ?? null,
     roa:           record["roa"]           ?? null,
+    roic:          record["roic"]          ?? null,
     liqCorrente:   record["liqCorrente"]   ?? null,
     pegRatio:      record["pegRatio"]      ?? null,
     dividaEbitda:  record["dividaEbitda"]  ?? null,
+    evEbit:        record["evEbit"]        ?? null,
   };
 }
 
@@ -353,7 +370,7 @@ function reconcile(
 
 export async function reconcileFundamentals(
   ticket: string,
-  yahoo: Partial<Record<"price"|"pl"|"pvp"|"dy"|"payout"|"margemLiquida"|"roe"|"roa"|"liqCorrente"|"pegRatio"|"dividaEbitda", number | null>>
+  yahoo: Partial<Record<"price"|"pl"|"pvp"|"dy"|"payout"|"margemLiquida"|"roe"|"roa"|"roic"|"liqCorrente"|"pegRatio"|"dividaEbitda"|"evEbit", number | null>>
 ): Promise<Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }>> {
   const bare = ticket.replace(/\.SA$/i, "").toUpperCase();
   console.log(`  [scraper] 🔎 Scraping para ${bare}...`);
@@ -373,7 +390,7 @@ export async function reconcileFundamentals(
 
   console.log(`  [scraper] ✅ Fontes em ${Date.now() - t0}ms: ${scraped.map(s => s.source).join(", ") || "nenhuma"}`);
 
-  const FIELDS = ["price","pl","pvp","dy","payout","margemLiquida","roe","roa","liqCorrente","pegRatio","dividaEbitda"] as const;
+  const FIELDS = ["price","pl","pvp","dy","payout","margemLiquida","roe","roa","roic","liqCorrente","pegRatio","dividaEbitda","evEbit"] as const;
   const result: Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }> = {};
 
   for (const key of FIELDS) {

@@ -21,12 +21,15 @@ const COLUMNS_TO_FETCH = [
   // valuation
   "market_cap_basic",
   "price_earnings_ttm",
+  "net_debt",
+  "ebit_ttm",
+  "enterprise_value_to_ebit_ttm",
   // dividendos
   "dividends_yield_current",
   // rentabilidade
-  "return_on_equity",
-  "return_on_assets",
-  "return_on_invested_capital",
+  "return_on_equity", //ROE
+  "return_on_assets", //ROA
+  "return_on_invested_capital", //ROIC
   // crescimento
   "earnings_per_share_diluted_ttm",
   "earnings_per_share_diluted_yoy_growth_ttm",
@@ -79,6 +82,7 @@ const COLUMNS_TO_FETCH = [
   "Recommend.Other",
 ];
 
+//Calculo do EV_EBIT = (market_cap_basic + net_debt) / ebit_ttm ou usar direto a coluna 'enterprise_value_to_ebit_ttm'
 
 function mapColumns(columns: string[], values: any[]) {
 
@@ -193,7 +197,7 @@ async function fetchStock(ticker: string) {
 
 async function main() {
 
-  const result = await fetchStock("PETR3");
+  const result = await fetchStock("PETR4");
 
   console.log(JSON.stringify(result, null, 2));
 }

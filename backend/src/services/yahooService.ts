@@ -258,7 +258,49 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
   console.log(`  [yahoo] PE=${n(quote?.trailingPE ?? sd?.trailingPE)}, ROE=${n(fd?.returnOnEquity)}, DY(ratio)=${dyNorm?.toFixed(4)}, beta=${n(quote?.beta ?? sd?.beta)}`);
   console.log(`  [yahoo] earningsGrowthYoY=${earningsGrowthYoY != null ? (earningsGrowthYoY * 100).toFixed(1) + "%" : "null"} [fonte: ${earningsGrowthSource}]`);
 
-  // ── Valores base do Yahoo antes da reconciliação ─────────────────────────
+  // ── ROIC — calculado via fundamentalsTimeSeries (v3) ────────────────────
+  // Fórmula: ROIC = NOPAT / Invested Capital
+  //   NOPAT          = operatingIncome × (1 - taxRate)
+  //   taxRate        = incomeTaxExpense / pretaxIncome
+  //   InvestedCapital = totalDebt + totalStockholderEquity - cashAndCashEquivalents
+  //
+  // Dados vêm dos arrays fin[] e bs[] já buscados por fetchTimeSeries().
+  // latestFin/latestBS pegam o registro mais recente (ordenado por date desc).
+  let roicYahoo: number | null = null;
+  {
+    const opIncome   = latestFin(fin, "operatingIncome");
+    const taxExpense = latestFin(fin, "incomeTaxExpense");
+    const pretaxInc  = latestFin(fin, "pretaxIncome");
+    const debt       = latestBS(bs, "totalDebt");
+    const equity     = latestBS(bs, "totalStockholderEquity")
+                    ?? latestBS(bs, "stockholdersEquity");
+    const cash       = latestBS(bs, "cashAndCashEquivalents")
+                    ?? latestBS(bs, "cashCashEquivalentsAndShortTermInvestments");
+
+    if (opIncome != null && taxExpense != null && pretaxInc != null
+        && pretaxInc !== 0 && debt != null && equity != null && cash != null) {
+      const taxRate       = taxExpense / pretaxInc;
+      const nopat         = opIncome * (1 - taxRate);
+      const investedCapital = debt + equity - cash;
+      if (investedCapital !== 0) {
+        roicYahoo = +(nopat / investedCapital).toFixed(6);
+        console.log(`  [yahoo] ROIC calc: opIncome=${opIncome}, taxRate=${(taxRate*100).toFixed(1)}%, NOPAT=${nopat.toFixed(0)}, IC=${investedCapital.toFixed(0)}, ROIC=${(roicYahoo*100).toFixed(2)}%`);
+      }
+    } else {
+      console.log(`  [yahoo] ROIC: dados insuficientes (opIncome=${opIncome}, taxExp=${taxExpense}, pretax=${pretaxInc}, debt=${debt}, equity=${equity}, cash=${cash})`);
+    }
+  }
+
+  // ── EV/EBIT ──────────────────────────────────────────────────────────────
+  // Yahoo não publica EV/EBIT diretamente.
+  // enterpriseValue (dks) / operatingIncome (latestFin) = proxy de EV/EBIT
+  // operatingIncome ≈ EBIT (diferença: itens não-recorrentes — aceitável para B3)
+  const enterpriseValue = n(dks?.enterpriseValue);
+  const opIncomeForEV   = latestFin(fin, "operatingIncome") ?? n(fd?.operatingIncome);
+  const evEbitYahoo = (enterpriseValue != null && opIncomeForEV != null && opIncomeForEV !== 0)
+    ? +(enterpriseValue / opIncomeForEV).toFixed(4)
+    : null;
+
   const yahooValues = {
     price:         n(quote?.regularMarketPrice),
     pl:            n(quote?.trailingPE  ?? sd?.trailingPE  ?? dks?.forwardPE),
@@ -268,10 +310,12 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
     margemLiquida: n(fd?.profitMargins  ?? quote?.profitMargins),
     roe:           n(fd?.returnOnEquity),
     roa:           n(fd?.returnOnAssets),
+    roic:          roicYahoo,
     liqCorrente:   n(fd?.currentRatio),
     pegRatio:      n(dks?.pegRatio      ?? dks?.trailingPegRatio),
     dividaEbitda:  (totalDebt != null && ebitda != null && ebitda !== 0)
                    ? totalDebt / ebitda : null,
+    evEbit:        evEbitYahoo,
   };
 
   // ── Scraping e reconciliação com fontes externas ─────────────────────────
@@ -324,6 +368,8 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
       bookValue:           n(dks?.bookValue),
       pegRatio:            R("pegRatio"),
       pegRatio_sources:    S("pegRatio"),
+      evEbit:              R("evEbit"),
+      evEbit_sources:      S("evEbit"),
       dividendRate:        n(sd?.dividendRate ?? quote?.dividendRate),
     },
     rentabilidade: {
@@ -331,6 +377,8 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
       returnOnEquity_sources:   S("roe"),
       returnOnAssets:           R("roa"),
       returnOnAssets_sources:   S("roa"),
+      returnOnInvestedCapital:  R("roic"),
+      roic_sources:             S("roic"),
       profitMargins:            R("margemLiquida"),
       profitMargins_sources:    S("margemLiquida"),
       grossMargins:             n(fd?.grossMargins),
