@@ -1,8 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
+import Swal from "sweetalert2";
 import { useConfigStore } from "@/stores/configStore";
 import { ALL_PROFILES, PROFILE_LABELS, PROFILE_ICONS, INDICATOR_LABELS } from "@/types";
 import type { ProfileName } from "@/types";
+
+const MySwal = Swal.mixin({
+  customClass: {
+    popup:         "swal-avidus",
+    confirmButton: "btn-danger text-sm",
+    cancelButton:  "btn-secondary text-sm",
+  },
+  buttonsStyling: false,
+  reverseButtons: true,
+});
 
 const store   = useConfigStore();
 const active  = ref<ProfileName>("MODERADO");
@@ -54,19 +65,47 @@ async function saveThresholds() {
 }
 
 async function doResetProfile() {
-  if (!confirm(`Resetar perfil ${active.value} para os valores padrão?`)) return;
+  const { isConfirmed } = await MySwal.fire({
+    title: "Resetar perfil",
+    html: `Deseja resetar o perfil <strong>${active.value}</strong> para os valores padrão?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "🔄 Resetar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
   saving.value = true;
-  try { await store.resetProfile(active.value); feedback(true); }
-  catch (e: any) { feedback(false, (e as any).message); }
-  finally { saving.value = false; }
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function doResetAll() {
-  if (!confirm("Resetar TODOS os perfis para os valores padrão?")) return;
+  const { isConfirmed } = await MySwal.fire({
+    title: "Resetar todos os perfis",
+    text: "Deseja resetar TODOS os perfis para os valores padrão? Esta ação não pode ser desfeita.",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "🔄 Resetar Tudo",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
   saving.value = true;
-  try { await store.resetAll(); feedback(true); }
-  catch (e: any) { feedback(false, (e as any).message); }
-  finally { saving.value = false; }
+  try {
+    await store.resetAll();
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
 }
 </script>
 

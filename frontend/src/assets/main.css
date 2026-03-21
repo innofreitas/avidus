@@ -19,3 +19,46 @@
   .badge-sell        { @apply bg-orange-100  dark:bg-orange-900  text-orange-800  dark:text-orange-200; }
   .badge-sell-strong { @apply bg-red-100     dark:bg-red-900     text-red-800     dark:text-red-200; }
 }
+
+/* ─── SweetAlert2 — tema Avidus ────────────────────────────── */
+.swal2-container {
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px) !important;
+}
+.swal-avidus {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
+}
+.dark .swal-avidus {
+  background: #111827 !important;
+  border-color: #1f2937 !important;
+}
+.swal-avidus .swal2-title {
+  color: #111827 !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  padding-top: 0.25rem !important;
+}
+.dark .swal-avidus .swal2-title {
+  color: #f3f4f6 !important;
+}
+.swal-avidus .swal2-html-container {
+  color: #4b5563 !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+.dark .swal-avidus .swal2-html-container {
+  color: #9ca3af !important;
+}
+.swal-avidus .swal2-icon {
+  margin-top: 1rem !important;
+  margin-bottom: 0.5rem !important;
+  transform: scale(0.85) !important;
+}
+.swal-avidus .swal2-actions {
+  gap: 0.5rem !important;
+  margin-top: 1.25rem !important;
+  flex-wrap: nowrap !important;
+}

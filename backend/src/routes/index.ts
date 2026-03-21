@@ -3,7 +3,7 @@ import { Router } from "express";
 import { Router as ConfigRouter } from "express";
 import { Router as StockRouter } from "express";
 import { getAllProfiles, getProfile, updateIndicators, updateThresholds, resetAll, resetProfile } from "../controllers/configController";
-import { analyzeStockHandler, invalidateCacheHandler } from "../controllers/stockController";
+import { analyzeStockHandler, invalidateCacheHandler, listCacheHandler } from "../controllers/stockController";
 
 const configRouter = ConfigRouter();
 configRouter.get("/profiles",                   getAllProfiles);
@@ -14,6 +14,7 @@ configRouter.post("/reset",                     resetAll);
 configRouter.post("/reset/:name",               resetProfile);
 
 const stockRouter = StockRouter();
+stockRouter.get("/cache",            listCacheHandler);
 stockRouter.get("/analyze/:ticker",  analyzeStockHandler);
 stockRouter.delete("/cache/:ticker", invalidateCacheHandler);
 
