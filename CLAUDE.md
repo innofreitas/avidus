@@ -14,7 +14,6 @@ análise técnica + fundamentalista → aplica scoring por 4 perfis de investido
 exibe tudo num dashboard Vue 3.
 
 **Funcionalidades implementadas:**
-
 - Análise individual de ativo com score por perfil de investidor
 - Portfólio — upload de planilha `.xlsx` exportada da B3, análise em lote
 - Análise Barsi — metodologia BEST (Bancos, Energia, Saneamento, Telecom, Seguridade)
@@ -23,6 +22,7 @@ exibe tudo num dashboard Vue 3.
   StatusInvest; reconcilia discrepâncias pela média das fontes
 - Preço justo — Graham (√22.5 × LPA × VPA) e Bazin (trailingAnnualDividendRate / 0.06)
 - Cache diário por ticker no PostgreSQL
+- **StockDataCache** — tela dedicada para visualizar/filtrar/deletar o cache do banco
 - Configuração de pesos e thresholds por perfil via banco de dados
 
 ---
@@ -37,10 +37,12 @@ avidus2/
 │   │   │   └── database.ts          # Prisma singleton — exporta `prisma`
 │   │   ├── controllers/
 │   │   │   ├── stockController.ts   # GET /api/stock/analyze/:ticker
+│   │   │   │                        # GET /api/stock/cache (listCacheHandler)
 │   │   │   │                        # DELETE /api/stock/cache/:ticker
 │   │   │   └── configController.ts  # CRUD perfis e thresholds
 │   │   ├── models/
-│   │   │   ├── stockModel.ts        # getCachedStockData / saveStockDataCache / deleteStockCache
+│   │   │   ├── stockModel.ts        # getCachedStockData / saveStockDataCache
+│   │   │   │                        # deleteStockCache / listCacheEntries
 │   │   │   └── configModel.ts       # getProfile / updateIndicators / updateThresholds
 │   │   ├── routes/index.ts          # monta /api/stock/* e /api/config/*
 │   │   ├── services/
@@ -69,10 +71,11 @@ avidus2/
         │   │   └── ScoreRadarChart.vue
         │   └── layout/
         │       ├── TopBar.vue
-        │       └── SideBar.vue          # rotas: /analysis, /portfolio, /settings
+        │       └── SideBar.vue          # rotas: /analysis, /portfolio, /cache, /settings
         ├── views/
         │   ├── AnalysisView.vue         # formulário + <AnalysisDetail> + refresh
         │   ├── PortfolioView.vue        # upload xlsx B3 + tabelas + modais Barsi/Buffett
+        │   ├── CacheView.vue            # StockDataCache — tabela + filtro + JSON viewer
         │   ├── SettingsView.vue
         │   └── DashboardView.vue
         ├── stores/
@@ -84,7 +87,7 @@ avidus2/
         │   ├── api.ts                   # axios com baseURL=/api (proxy vite → :3001)
         │   └── formatters.ts            # formatNumber, formatPercent, decisionColor,
         │                                #   decisionBadgeClass
-        └── router/index.ts              # /analysis, /portfolio, /settings
+        └── router/index.ts              # /analysis, /portfolio, /cache, /settings
 ```
 
 ---
@@ -93,22 +96,20 @@ avidus2/
 
 ### Modelos
 
-| Modelo            | Tabela              | Propósito                                           |
-| ----------------- | ------------------- | --------------------------------------------------- |
-| `IndicatorConfig` | `indicator_configs` | Pesos e faixas ideais por perfil+indicador          |
-| `ScoreThreshold`  | `score_thresholds`  | Limiares de decisão por perfil (COMPRA_FORTE ≥ X)   |
-| `StockDataCache`  | `stock_data_cache`  | rawData JSON por ticker+date (cache diário)         |
-| `StockAnalysis`   | `stock_analyses`    | Histórico de análises (modelo existe, sem UI ainda) |
+| Modelo | Tabela | Propósito |
+|---|---|---|
+| `IndicatorConfig` | `indicator_configs` | Pesos e faixas ideais por perfil+indicador |
+| `ScoreThreshold` | `score_thresholds` | Limiares de decisão por perfil (COMPRA_FORTE ≥ X) |
+| `StockDataCache` | `stock_data_cache` | rawData JSON por ticker+date (cache diário) |
+| `StockAnalysis` | `stock_analyses` | Histórico de análises (modelo existe, sem UI ainda) |
 
 ### Enums
-
 ```
 InvestorProfile: GENERICO | CONSERVADOR | MODERADO | AGRESSIVO
 DecisionType:    COMPRA_FORTE | COMPRA | MANTER | VENDA | VENDA_FORTE
 ```
 
 ### Cache
-
 - Cache é por `ticker + date` (chave composta única)
 - Ticker salvo **sem** sufixo `.SA` (ex: `PETR4`, não `PETR4.SA`)
 - `DELETE /api/stock/cache/:ticker` invalida o cache do dia
@@ -158,9 +159,10 @@ stockController.analyzeStockHandler()
 ## 5. API — Endpoints
 
 ```
-# Análise
+# Análise e Cache
 GET    /api/stock/analyze/:ticker
-DELETE /api/stock/cache/:ticker
+GET    /api/stock/cache                   # lista todos os registros (query: ?ticker=PETR4)
+DELETE /api/stock/cache/:ticker           # remove cache do ticker
 
 # Configuração de perfis
 GET    /api/config/profiles
@@ -176,7 +178,6 @@ POST   /api/config/reset/:name        # reset perfil específico
 ## 6. Decisões Arquiteturais Críticas
 
 ### 6.1 Yahoo Finance v3 — Singleton obrigatório
-
 ```typescript
 // @ts-ignore
 import YahooFinance from "yahoo-finance2";
@@ -185,7 +186,6 @@ const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 ```
 
 ### 6.2 Normalização de ticker
-
 ```typescript
 // normalizeTicker() em yahooService.ts
 "PETR4"  → "PETR4.SA"   // padrão B3: /^[A-Z]{3,6}\d{1,2}$/
@@ -199,30 +199,26 @@ const ticker = store.result.meta.ticker.replace(/\.SA$/i, "");
 ```
 
 ### 6.3 DividendYield — normalização obrigatória
-
 ```typescript
 // quote.dividendYield  → JÁ EM % (5.2 = 5.2%) → divide por 100
 // sd.dividendYield     → RATIO  (0.052)         → usa direto
 // Heurística: valor >= 0.5 assume que está em % → divide por 100
-normalizeDY(fromQuote, fromSD);
+normalizeDY(fromQuote, fromSD)
 // Preferir sd.dividendYield — sem ambiguidade
 ```
 
 ### 6.4 Bazin usa trailingAnnualDividendRate
-
 ```typescript
 // NÃO usar dividendRate (pode ser projetado/anualizado pelo Yahoo)
 // USAR trailingAnnualDividendRate = soma REAL dos dividendos últimos 12 meses
-const dividend12m =
-  dividendos?.trailingAnnualDividendRate ??
-  valuation?.dividendRate ?? // fallback
-  null;
+const dividend12m = dividendos?.trailingAnnualDividendRate
+                 ?? valuation?.dividendRate  // fallback
+                 ?? null;
 const preçoJusto = dividend12m / 0.06;
 // Fonte: quote.trailingAnnualDividendRate (buildFundamental recebe quote)
 ```
 
 ### 6.5 earningsGrowthYoY — cadeia de prioridade
-
 ```typescript
 // 1ª opção: financialData.earningsGrowth — ratio calculado pelo Yahoo (mais confiável)
 // 2ª opção: earningsTrend["0y"].growthActual
@@ -231,7 +227,6 @@ const preçoJusto = dividend12m / 0.06;
 ```
 
 ### 6.6 fundamentalsTimeSeries v3 — formato array
-
 ```typescript
 // financials → Array<{ date: Date, netIncome, totalRevenue, EBITDA, ... }>
 // balance-sheet → Array<{ date: Date, totalDebt, cashAndCashEquivalents, ... }>
@@ -241,7 +236,6 @@ const preçoJusto = dividend12m / 0.06;
 ```
 
 ### 6.7 Reconciliação de indicadores — lógica de 4 casos
-
 ```typescript
 function reconcile(key, yahoo, scraped) {
   // 1. Nenhuma fonte tem valor → mantém yahoo (mesmo se null)
@@ -251,8 +245,7 @@ function reconcile(key, yahoo, scraped) {
   if (yahoo == null) return { final: média(valid), changed: true };
 
   // 3. Yahoo confirmado por ≥1 fonte (±5%) → mantém yahoo
-  if (valid.some((s) => close(yahoo, s.value)))
-    return { final: yahoo, changed: false };
+  if (valid.some(s => close(yahoo, s.value))) return { final: yahoo, changed: false };
 
   // 4. Yahoo diverge de todas → substitui pela média
   return { final: média(valid), changed: true };
@@ -260,10 +253,8 @@ function reconcile(key, yahoo, scraped) {
 // Tolerância: 5% (|a-b| / max(|a|,|b|) ≤ 0.05)
 ```
 
-### 6.8 \_sources — rastreabilidade por campo
-
+### 6.8 _sources — rastreabilidade por campo
 Cada campo reconciliável no rawData tem um objeto `_sources` ao lado:
-
 ```typescript
 // Exemplo: returnOnEquity e returnOnEquity_sources
 returnOnEquity: 0.218,
@@ -281,7 +272,6 @@ returnOnEquity_sources: {
 ```
 
 ### 6.9 AnalysisDetail — componente reutilizável
-
 ```typescript
 // Props: result: AnalysisResult, fromCache?: boolean, refreshing?: boolean
 // Emit:  @refresh
@@ -293,7 +283,6 @@ returnOnEquity_sources: {
 ```
 
 ### 6.10 Scoring — DB-driven com pesos ajustados
-
 ```typescript
 // Score é calculado por perfil buscando pesos do banco (IndicatorConfig)
 // Quando um indicador está ausente (null), seu peso é redistribuído
@@ -304,7 +293,6 @@ const pesoAdj = d.peso * (pesoTotal / pesoEfetivo);
 ```
 
 ### 6.11 Fonte de dados alternativa
-
 ```typescript
 // .env: DATA_SOURCE=brapi
 // brapiService implementa a mesma interface de yahooService:
@@ -318,7 +306,6 @@ const pesoAdj = d.peso * (pesoTotal / pesoEfetivo);
 ## 7. Scrapers — Estrutura HTML Validada
 
 ### Investidor10
-
 ```
 URL: https://investidor10.com.br/acoes/${ticket}/
 Cotação: ._card.cotacao .value → "R$ 28,75"
@@ -333,7 +320,6 @@ I10_PCT (divide por 100): dy, payout, margemLiquida, roe, roa
 ```
 
 ### Fundamentus
-
 ```
 URL: https://www.fundamentus.com.br/detalhes.php?papel=${ticket}
 ⚠️  Serve ISO-8859-1 → usar iconv.decode(Buffer, "iso-8859-1") obrigatório
@@ -345,7 +331,6 @@ FUND_MAP: { "p/l"→pl, "p/vp"→pvp, "div.yield"→dy, "marg. líquida"→marge
 ```
 
 ### StatusInvest
-
 ```
 URL: https://statusinvest.com.br/acoes/${ticket.toLowerCase()}
 Cotação: [title="Valor atual do ativo"] strong
@@ -400,7 +385,6 @@ Tabela Ações:
 ## 9. Convenções e Padrões
 
 ### Backend — TypeScript
-
 ```typescript
 // Percentuais SEMPRE em ratio (0-1) internamente:
 //   ROE 21% → 0.21, DY 5% → 0.05, Margem 12% → 0.12
@@ -424,7 +408,6 @@ export function analyzeFairPrice(valuation, price, dividendos?) { ... }
 ```
 
 ### Frontend — Vue 3
-
 ```typescript
 // Todos os componentes: <script setup lang="ts">
 // ProfileName: import type { ProfileName } — nunca import de valor
@@ -442,18 +425,14 @@ export function analyzeFairPrice(valuation, price, dividendos?) { ... }
 ## 10. Configuração do Ambiente
 
 ### .env do backend
-
 ```env
 DATABASE_URL="postgresql://user:pass@localhost:5432/avidus"
 PORT=3001
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:5173
 DATA_SOURCE=yahoo   # ou "brapi"
 BRAPI_TOKEN=        # opcional, só para brapi
 ```
 
 ### Comandos
-
 ```bash
 # Backend
 cd backend
@@ -481,29 +460,27 @@ node testScraper.mjs PETR4 --fonte=investidor10
 ## 11. Dependências
 
 ### Backend
-
-| Pacote                 | Versão     | Uso                                     |
-| ---------------------- | ---------- | --------------------------------------- |
-| `yahoo-finance2`       | ^3.0.0     | Fonte principal — singleton obrigatório |
-| `axios`                | ^1.6.0     | HTTP client para scrapers               |
-| `cheerio`              | ^1.0.0     | Parse HTML dos scrapers (seletores CSS) |
-| `iconv-lite`           | transitivo | Decode ISO-8859-1 do Fundamentus        |
-| `@prisma/client`       | ^5.7.1     | ORM PostgreSQL                          |
-| `express`              | ^4.18.2    | API REST                                |
-| `express-async-errors` | ^3.1.1     | Propaga erros async para errorHandler   |
-| `tsx`                  | ^4.7.0     | Dev server TypeScript com hot reload    |
+| Pacote | Versão | Uso |
+|---|---|---|
+| `yahoo-finance2` | ^3.0.0 | Fonte principal — singleton obrigatório |
+| `axios` | ^1.6.0 | HTTP client para scrapers |
+| `cheerio` | ^1.0.0 | Parse HTML dos scrapers (seletores CSS) |
+| `iconv-lite` | transitivo | Decode ISO-8859-1 do Fundamentus |
+| `@prisma/client` | ^5.7.1 | ORM PostgreSQL |
+| `express` | ^4.18.2 | API REST |
+| `express-async-errors` | ^3.1.1 | Propaga erros async para errorHandler |
+| `tsx` | ^4.7.0 | Dev server TypeScript com hot reload |
 
 ### Frontend
-
-| Pacote                     | Versão  | Uso                              |
-| -------------------------- | ------- | -------------------------------- |
-| `vue`                      | ^3.3.11 | Framework                        |
-| `pinia`                    | ^2.1.7  | State management                 |
-| `vue-router`               | ^4.2.5  | Roteamento SPA                   |
-| `axios`                    | ^1.6.2  | HTTP client                      |
-| `xlsx`                     | ^0.18.5 | Leitura de planilhas .xlsx da B3 |
-| `chart.js` + `vue-chartjs` | ^4/^5   | Gráficos (radar, linha, barra)   |
-| `tailwindcss`              | ^3.4.0  | CSS utility-first                |
+| Pacote | Versão | Uso |
+|---|---|---|
+| `vue` | ^3.3.11 | Framework |
+| `pinia` | ^2.1.7 | State management |
+| `vue-router` | ^4.2.5 | Roteamento SPA |
+| `axios` | ^1.6.2 | HTTP client |
+| `xlsx` | ^0.18.5 | Leitura de planilhas .xlsx da B3 |
+| `chart.js` + `vue-chartjs` | ^4/^5 | Gráficos (radar, linha, barra) |
+| `tailwindcss` | ^3.4.0 | CSS utility-first |
 
 ---
 
@@ -523,86 +500,108 @@ node testScraper.mjs PETR4 --fonte=investidor10
 - [x] AnalysisBarsi: 4 abas com simulação/checkbox/redistribuição de pesos
 - [x] AnalysisBuffett: 4 abas com 7 critérios moat, critérios expansíveis, simulação
 - [x] testScraper.mjs validado para as 3 fontes com diagnóstico completo
+- [x] StockDataCache — tela de visualização do cache (CacheView.vue)
+  - Tabela com ordenação por ticker/data/updatedAt e filtro por ticker
+  - Botão ▼ rawData expande inline JSON viewer com 7 abas (Meta/Fundamental/
+    Técnico/Preço Justo/Analistas/Scores/JSON Completo) + botão Copiar
+  - Botão 🗑️ deleta o cache do ticker via DELETE /api/stock/cache/:ticker
+  - Estado de expansão via `ref<string|null>` (não Set — reativo no Vue 3)
+  - JSON exibido via `<pre>{{ fmtJson(data) }}</pre>` (sem v-html)
 
 ---
 
 ## 13. Próximos Passos Pendentes
 
-- [ ] **\_sources no frontend** — AnalysisDetail já recebe os dados; falta renderizar
-      a origem de cada indicador (ex: mostrar tooltip ou badge indicando se o valor
-      foi substituído pelo scraping)
+- [ ] **_sources no frontend** — AnalysisDetail já recebe os dados; falta renderizar
+  a origem de cada indicador (ex: tooltip/badge indicando se o valor foi substituído
+  pelo scraping e qual fonte foi usada)
+- [ ] **ROIC/EV-EBIT no frontend** — campos já chegam no rawData (`rentabilidade.returnOnInvestedCapital`,
+  `valuation.evEbit`); falta exibir no AnalysisDetail e usar no scoring
 - [ ] **Histórico de análises** — modelo `StockAnalysis` existe no banco mas não é
-      usado; implementar tela de histórico (últimas análises por ticker e por perfil)
+  usado; implementar tela de histórico (últimas análises por ticker e por perfil)
 - [ ] **SettingsView** — verificar se o CRUD de pesos e thresholds está 100% funcional
-      (PUT /api/config/profiles/:name/indicators e /thresholds)
+  (PUT /api/config/profiles/:name/indicators e /thresholds)
 - [ ] **Testes** — nenhum teste automatizado ainda; considerar vitest para analysisService
-      (funções puras — fácil de testar)
+  (funções puras — fácil de testar)
 - [ ] **Verificar botão Buffett no PortfolioView** — componente AnalysisBuffett.vue
-      existe; confirmar se o botão está renderizando corretamente na tabela de ações
+  existe; confirmar se o botão está renderizando corretamente na tabela de ações
 
 ---
 
 ## 14. Contexto Não Óbvio
 
 ### Scrapers não funcionam no sandbox do Claude
-
 Os domínios `investidor10.com.br`, `fundamentus.com.br` e `statusinvest.com.br`
 estão bloqueados no ambiente de execução do Claude Code. O `testScraper.mjs` só
 funciona rodando **localmente** na máquina do desenvolvedor.
 
 ### iconv-lite vem de forma transitiva
-
 O `iconv-lite` é dependência transitiva do `cheerio`. Não precisa instalar
 explicitamente — só importar: `import * as iconv from "iconv-lite"`.
 
 ### Planilha B3 — encoding dos nomes de aba
-
 A B3 exporta com nomes de aba acentuados. O PortfolioView usa normalização NFD
 para matching robusto:
-
 ```javascript
-nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 // "Ações" → "Acoes", "Fundo de Investimento" → "Fundo de Investimento"
 ```
 
 ### Score de pontuação no Portfólio
-
 O campo "Pontuação" na tabela é o **somatório dos 4 scores** (range 0-400),
 não a média. Isso é intencional para diferenciar ativos com dados incompletos.
 
 ### AnalysisDetail detecta o pai via vnode.props
-
 O botão "Forçar Atualização" só aparece quando o pai escuta `@refresh`:
-
 ```typescript
-const showRefresh = computed(
-  () => !!getCurrentInstance()?.vnode.props?.onRefresh,
+const showRefresh = computed(() =>
+  !!getCurrentInstance()?.vnode.props?.onRefresh
 );
 ```
-
 Isso permite reutilizar o mesmo componente em contextos diferentes
 (AnalysisView com refresh vs modal do portfólio sem refresh).
 
 ### Payout do StatusInvest via API JSON
-
 O payout **não vem do HTML** da página principal — é carregado de forma assíncrona:
-
 ```
 GET https://statusinvest.com.br/acao/payoutresult?code=PETR4&type=0
 Header: X-Requested-With: XMLHttpRequest
 JSON retornado: { actual_F: "24,41%", ... }
 ```
-
 Usar `parsePct(String(actual_F))` — o valor é uma string com `%`.
 
 ### rawData.fundamental.valuation vs rawData.fundamental.dividendos
-
 São objetos separados no rawData. `analyzeFairPrice()` recebe ambos:
-
 ```typescript
 analyzeFairPrice(
-  fundamental.valuation, // LPA (trailingEps), VPA (bookValue)
+  fundamental.valuation,   // LPA (trailingEps), VPA (bookValue)
   tech.price,
-  fundamental.dividendos, // trailingAnnualDividendRate para Bazin
-);
+  fundamental.dividendos   // trailingAnnualDividendRate para Bazin
+)
+```
+
+### CacheView — reatividade com Set no Vue 3
+`Set` e `Map` **não são reativos** no Vue 3 quando mutados no lugar.
+A CacheView usa `ref<string | null>` para o id expandido (não Set):
+```typescript
+const expandedId = ref<string | null>(null)   // ✅ reativo
+// NUNCA: const expanded = ref<Set<string>>(new Set())  // ❌ .has() não dispara re-render
+```
+O mesmo vale para `deleting` — usar `ref<boolean>` (um delete por vez), não `Set`.
+
+### CacheView — JSON viewer sem v-html
+O JSON é exibido como texto puro em `<pre>`, não com `v-html`:
+```vue
+<pre class="text-xs font-mono text-green-300 whitespace-pre-wrap">{{ fmtJson(tabContent) }}</pre>
+```
+`v-html` com regex de syntax highlight corrompeu o JSON na versão anterior quando
+strings continham `:` ou `"` — evitar para esse caso.
+
+### stockModel — rawData precisa de cast `as any`
+O Prisma gera tipo estrito `InputJsonValue` para campos `Json`. O TypeScript não
+consegue provar que `Record<string, unknown>` é compatível:
+```typescript
+// ✅ Correto
+create: { ticker, date, rawData: rawData as any },
+update: { rawData: rawData as any },
 ```
