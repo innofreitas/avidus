@@ -12,8 +12,7 @@ const TV_SCAN_URL = "https://scanner.tradingview.com/brazil/scan?label-product=s
  *   Percentuais (ROE, ROA, ROIC, DY, EPS growth)  → em %   (21.5 = 21,5%)  → dividir por 100
  *   Múltiplos   (P/L, EV/EBIT, debt_to_equity)     → valor direto (15.3 = 15,3x)
  *   Preços/Volumes/Market Cap                       → valor absoluto (BRL)
- *   AnalystRating                                   → 1-5  (1=strong sell … 5=strong buy)
- *   Recommend.All                                   → -1 a +1 (sell → buy)
+ *   AnalystRating                                   → (buy,sell,hold,underperform,strong_buy,strong_sell)
  */
 const COLUMNS = [
   // identificação
@@ -23,40 +22,40 @@ const COLUMNS = [
   "subtype",
   "sector",
   // preço
-  "close",
-  "open",
+  "close", //preço atual
+  "open", //preço de abertura
   // variação / volume
-  "change",
-  "volume",
-  "relative_volume_10d_calc",
+  "change", //variação
+  "volume", //volume
+  "relative_volume_10d_calc", //volume relativo
   // valuation
   "market_cap_basic",
-  "price_earnings_ttm",
-  "net_debt",           // dívida líquida (proxy de totalDebt; usado para Dívida/EBITDA)
-  "ebit_ttm",
-  "enterprise_value_to_ebit_ttm",
+  "price_earnings_ttm", //P/L
+  "net_debt", // dívida líquida (proxy de totalDebt; usado para Dívida/EBITDA)
+  "ebit_ttm", //EBIT
+  "enterprise_value_to_ebit_ttm", //EV/EBIT
   // dividendos
-  "dividends_yield_current",
+  "dividends_yield_current", //DY
   // rentabilidade (TV retorna em %, ex: 21.5 = 21,5%)
-  "return_on_equity",
-  "return_on_assets",
-  "return_on_invested_capital",
+  "return_on_equity", //ROE
+  "return_on_assets", //ROA
+  "return_on_invested_capital", //ROIC
   // crescimento
   "earnings_per_share_diluted_ttm",
-  "earnings_per_share_diluted_yoy_growth_ttm",
+  "earnings_per_share_diluted_yoy_growth_ttm", //Crescimento do EPS
   // DRE
-  "total_revenue",
-  "gross_profit",
-  "net_income",
-  "ebitda",
+  "total_revenue", //receita total
+  "gross_profit", //lucro bruto
+  "net_income", //lucro líquido
+  "ebitda", //ebitda
   // balanço
-  "total_assets",
+  "total_assets", //ativos totais
   // fluxo de caixa
-  "free_cash_flow",
+  "free_cash_flow", //fluxo de caixa livre
   // risco / liquidez
-  "debt_to_equity",
-  "current_ratio",
-  "quick_ratio",
+  "debt_to_equity", //Dívida Líquida/EBITDA
+  "current_ratio", //Liquidez Corrente
+  "quick_ratio", //Liquidez Seca
   // indicadores técnicos pré-calculados
   "ATR",
   "RSI",
@@ -80,10 +79,7 @@ const COLUMNS = [
   "Pivot.M.Classic.S1",
   "Pivot.M.Classic.R1",
   // recomendação
-  "AnalystRating",
-  "Recommend.All",
-  "Recommend.MA",
-  "Recommend.Other",
+  "AnalystRating", //recomendação de analistas (buy,sell,hold,underperform,strong_buy,strong_sell)
 ] as const;
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -157,6 +153,7 @@ async function fetchTVData(ticker: string): Promise<Record<string, any>> {
 // ─── Tipos exportados ──────────────────────────────────────────
 
 export interface TVFundamentals {
+  price: number | null;
   pl: number | null;
   dy: number | null;
   roe: number | null;
@@ -166,17 +163,15 @@ export interface TVFundamentals {
   liqCorrente: number | null;
   dividaEbitda: number | null;
   evEbit: number | null;
+  ebitda: number | null;
+  netIncome: number | null;
+  earningsGrowthYoY: number | null;
+  freeCashflow: number | null;
 }
 
 export interface TVRecommendations {
-  /** recommendationKey mapeado da escala 1-5 do TV (strong_buy/buy/hold/underperform/sell) */
+  /** recommendationKey mapeado do TV (strong_buy/buy/hold/underperform/sell) */
   recommendationKey: string | null;
-  /** Recommend.All: score combinado osciladores + médias móveis (-1 = sell … +1 = buy) */
-  recommendScore: number | null;
-  /** Recommend.MA: componente de médias móveis (-1 … +1) */
-  recommendMA: number | null;
-  /** Recommend.Other: componente de osciladores (-1 … +1) */
-  recommendOther: number | null;
 }
 
 export interface TVTechnicals {
@@ -215,6 +210,8 @@ export async function fetchTVAll(rawTicker: string): Promise<{ fundamentals: TVF
   const ticker = normalizeTicker(rawTicker);
   const d = await fetchTVData(ticker);
 
+  //console.log('fetchTVData',d);
+
   const totalRevenue = n(d["total_revenue"]);
   const netIncome = n(d["net_income"]);
   const netDebt = n(d["net_debt"]);
@@ -222,6 +219,7 @@ export async function fetchTVAll(rawTicker: string): Promise<{ fundamentals: TVF
 
   return {
     fundamentals: {
+      price: n(d["close"]),
       pl: n(d["price_earnings_ttm"]),
       dy: pct(d["dividends_yield_current"]),
       roe: pct(d["return_on_equity"]),
@@ -234,12 +232,13 @@ export async function fetchTVAll(rawTicker: string): Promise<{ fundamentals: TVF
       dividaEbitda: (netDebt != null && ebitda != null && ebitda !== 0)
         ? netDebt / ebitda : null,
       evEbit: n(d["enterprise_value_to_ebit_ttm"]),
+      ebitda,
+      netIncome,
+      earningsGrowthYoY: pct(d["earnings_per_share_diluted_yoy_growth_ttm"]),
+      freeCashflow: n(d["free_cash_flow"]),
     },
     recommendations: {
-      recommendationKey: mapAnalystRating(n(d["AnalystRating"])),
-      recommendScore: n(d["Recommend.All"]),
-      recommendMA: n(d["Recommend.MA"]),
-      recommendOther: n(d["Recommend.Other"]),
+      recommendationKey: d["AnalystRating"],
     },
     technicals: {
       close: n(d["close"]),
@@ -262,21 +261,6 @@ export async function fetchTVAll(rawTicker: string): Promise<{ fundamentals: TVF
       stochD: n(d["Stoch.D"]),
     },
   };
-}
-
-// ─── Mapeamento para AnalystRating ─────────────────────────────
-
-/**
- * TV retorna AnalystRating em escala 1-5:
- *   5 = strong_buy | 4 = buy | 3 = hold | 2 = underperform | 1 = sell
- */
-function mapAnalystRating(rating: number | null): string | null {
-  if (rating == null) return null;
-  if (rating >= 4.5) return "strong_buy";
-  if (rating >= 3.5) return "buy";
-  if (rating >= 2.5) return "hold";
-  if (rating >= 1.5) return "underperform";
-  return "sell";
 }
 
 // ─── Export principal ──────────────────────────────────────────
@@ -361,7 +345,7 @@ export async function fetchAllData(rawTicker: string): Promise<Record<string, un
   };
 
   // ── Recomendação ─────────────────────────────────────────────
-  const recommendationKey = mapAnalystRating(n(d["AnalystRating"]));
+  const recommendationKey = d["AnalystRating"];
 
   console.log(`  [tradingview] price=${price}, ROE=${roe?.toFixed(4)}, DY(ratio)=${dy?.toFixed(4)}, earningsGrowth=${earningsGrowthYoY != null ? (earningsGrowthYoY * 100).toFixed(1) + "%" : "null"}`);
   console.log(`  [tradingview] P/L=${n(d["price_earnings_ttm"])}, EV/EBIT=${n(d["enterprise_value_to_ebit_ttm"])}, Liq.Corrente=${n(d["current_ratio"])}`);
@@ -436,7 +420,15 @@ export async function fetchAllData(rawTicker: string): Promise<Record<string, un
         exDividendDate: null,
       },
       risco: { beta: null },  // TV tem beta_1_year mas não está na lista padrão de colunas
-      preco_sources: null,
+      preco_sources: {
+        yahooFinance: null,
+        investidor10: null,
+        fundamentus: null,
+        statusinvest: null,
+        tradingview: price,
+        final: price,
+        changed: false,
+      },
     },
     recommendations: {
       recommendationKey,
@@ -476,9 +468,6 @@ export async function fetchAllData(rawTicker: string): Promise<Record<string, un
       ichimokuConv: n(d["Ichimoku.CLine"]),
       pivotS1: n(d["Pivot.M.Classic.S1"]),
       pivotR1: n(d["Pivot.M.Classic.R1"]),
-      recommendAll: n(d["Recommend.All"]),
-      recommendMA: n(d["Recommend.MA"]),
-      recommendOther: n(d["Recommend.Other"]),
       analystRating: n(d["AnalystRating"]),
     },
   };

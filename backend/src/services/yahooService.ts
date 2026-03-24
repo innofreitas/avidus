@@ -131,10 +131,45 @@ function buildTechnical(candles: any[]) {
     return sl.length < Math.min(days, 5) ? null : mean(sl.map((c: any) => (c.close ?? 0) * (c.volume ?? 0)));
   };
 
+  // ── RSI14 ────────────────────────────────────────────────────
+  let rsi14: number | null = null;
+  if (len >= 15) {
+    const deltas = closes.slice(1).map((c, i) => c - closes[i]);
+    const slice = deltas.slice(-14);
+    const gains = slice.filter(d => d > 0);
+    const losses = slice.filter(d => d < 0).map(Math.abs);
+    const ag = gains.length ? gains.reduce((a, b) => a + b, 0) / gains.length : 0;
+    const al = losses.length ? losses.reduce((a, b) => a + b, 0) / losses.length : 0;
+    rsi14 = +(100 - 100 / (1 + (al === 0 ? 100 : ag / al))).toFixed(2);
+  }
+
+  // ── MACD (12, 26, 9) ─────────────────────────────────────────
+  let macd: number | null = null;
+  let macdSignal: number | null = null;
+  let macdHist: number | null = null;
+  if (len >= 26) {
+    const emaS = (arr: number[], period: number) => {
+      const k = 2 / (period + 1);
+      return arr.reduce((out: number[], v, i) => {
+        out.push(i === 0 ? v : v * k + out[i - 1] * (1 - k));
+        return out;
+      }, []);
+    };
+    const ema12 = emaS(closes, 12);
+    const ema26 = emaS(closes, 26);
+    const macdLine = ema12.map((v, i) => v - ema26[i]).slice(25);
+    const signalLine = emaS(macdLine, 9);
+    const idx = macdLine.length - 1;
+    macd = +macdLine[idx].toFixed(4);
+    macdSignal = +signalLine[idx].toFixed(4);
+    macdHist = +(macd - macdSignal).toFixed(4);
+  }
+
   return {
     candles, closes, price: closes.at(-1) ?? null,
     mm20, mm50, mm200, slope20Pct, adxProxy,
     high52w, low52w, logReturns,
+    rsi14, macd, macdSignal, macdHist,
     drawdown: { maxPct: +maxDD.toFixed(2), peakDate, troughDate },
     lmd: { d21: lmd(21), d63: lmd(63), d252: lmd(252) },
     dataRange: { from: candles[0].date, to: candles.at(-1)!.date, days: candles.length },
@@ -191,8 +226,11 @@ function latestFin(financials: any[] | null, field: string): number | null {
  *   adxProxy (proxy ATR-based do Yahoo) ↔ adx (ADX de Wilder do TV)
  *   — diferenças esperadas; apenas registrado para referência.
  *
- * TV-only (não calculados no buildTechnical — armazenados como referência):
- *   rsi14, rsi7, macd, macdSignal, macdHist, cci20, stochK, stochD, ema20, ema50, ema200, atr
+ * Calculados dos closes do Yahoo (mesma fórmula do analysisService):
+ *   rsi14, macd, macdSignal, macdHist
+ *
+ * TV-only (Yahoo não calcula — yahoo=null por design):
+ *   rsi7, ema20, ema50, ema200, sma100, atr, cci20, stochK, stochD
  */
 function buildTVTechComparison(tech: ReturnType<typeof buildTechnical>, tvTech: TVTechnicals) {
   const pctDiff = (a: number | null, b: number | null): number | null => {
@@ -200,6 +238,9 @@ function buildTVTechComparison(tech: ReturnType<typeof buildTechnical>, tvTech: 
     const denom = Math.max(Math.abs(a), Math.abs(b));
     return denom === 0 ? 0 : +((Math.abs(a - b) / denom) * 100).toFixed(2);
   };
+
+  //console.log("tech", tech);
+  //console.log("tvTech", tvTech);
 
   // Tolerância 2% para SMAs (diferenças de ajuste de preço entre fontes são esperadas)
   const TOLERANCE = 2;
@@ -213,6 +254,7 @@ function buildTVTechComparison(tech: ReturnType<typeof buildTechnical>, tvTech: 
     return { yahoo: yahooVal ?? null, tv: tvVal ?? null, pctDiff: diff, diverges: diverges ?? false };
   };
 
+  // ── RSI14 calculado dos closes do Yahoo (mesma fórmula do analysisService) ──
   return {
     // ── Comparáveis diretos ──────────────────────────────────
     price: compare(tech.price, tvTech.close, "price"),
@@ -222,20 +264,21 @@ function buildTVTechComparison(tech: ReturnType<typeof buildTechnical>, tvTech: 
     // ── Comparável indireto ──────────────────────────────────
     // adxProxy usa ATR normalizado; TV usa ADX de Wilder — valores distintos por design
     adx: compare(tech.adxProxy, tvTech.adx, "adx"),
-    // ── TV-only (referência adicional) ───────────────────────
-    rsi14: tvTech.rsi14,
-    rsi7: tvTech.rsi7,
-    macd: tvTech.macd,
-    macdSignal: tvTech.macdSignal,
-    macdHist: tvTech.macdHist,
-    ema20: tvTech.ema20,
-    ema50: tvTech.ema50,
-    ema200: tvTech.ema200,
-    sma100: tvTech.sma100,
-    atr: tvTech.atr,
-    cci20: tvTech.cci20,
-    stochK: tvTech.stochK,
-    stochD: tvTech.stochD,
+    // ── Pré-calculados em buildTechnical (sem recálculo) ─────
+    rsi14: compare(tech.rsi14, tvTech.rsi14, "rsi14"),
+    macd: compare(tech.macd, tvTech.macd, "macd"),
+    macdSignal: compare(tech.macdSignal, tvTech.macdSignal, "macdSignal"),
+    macdHist: compare(tech.macdHist, tvTech.macdHist, "macdHist"),
+    // ── TV-only (Yahoo não calcula — yahoo=null por design) ──────
+    rsi7: compare(null, tvTech.rsi7, "rsi7"),
+    ema20: compare(null, tvTech.ema20, "ema20"),
+    ema50: compare(null, tvTech.ema50, "ema50"),
+    ema200: compare(null, tvTech.ema200, "ema200"),
+    sma100: compare(null, tvTech.sma100, "sma100"),
+    atr: compare(null, tvTech.atr, "atr"),
+    cci20: compare(null, tvTech.cci20, "cci20"),
+    stochK: compare(null, tvTech.stochK, "stochK"),
+    stochD: compare(null, tvTech.stochD, "stochD"),
   };
 }
 
@@ -246,6 +289,8 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
 
   const fin = ts?.financials ?? null; // Array v3 (financials)
   const bs = ts?.balanceSheet ?? null; // Array v3 (balance-sheet)
+
+  //console.log('tvIndicators', ticker, JSON.stringify(tvIndicators, null, 2));
 
   // earningsTrend.trend[] campos:  
   //   t.period          → "0q", "+1q", "0y", "+1y"
@@ -391,6 +436,10 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
     dividaEbitda: (totalDebt != null && ebitda != null && ebitda !== 0)
       ? totalDebt / ebitda : null,
     evEbit: evEbitYahoo,
+    ebitda,
+    netIncome: latestFin(fin, "netIncome") ?? n(fd?.netIncome),
+    earningsGrowthYoY,
+    freeCashflow: n(fd?.freeCashflow),
   };
 
   // ── Reconciliação com fontes externas ────────────────────────────────────
@@ -398,6 +447,7 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
   // que os scrapers na função reconcile() do scraperService).
   const tvSource: ScrapedFundamentals | null = tvIndicators ? {
     source: "tradingview",
+    price: tvIndicators.price,
     pl: tvIndicators.pl,
     dy: tvIndicators.dy,
     roe: tvIndicators.roe,
@@ -443,9 +493,42 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
     }
   }
 
+  // ── Campos com comparação exclusiva com TV (scrapers não raspam estes) ─────
+  // Mesma lógica de reconciliação dos scrapers (±5%):
+  //   1. TV null          → sem entrada em rec (Yahoo vence por padrão)
+  //   2. Yahoo null       → usa TV
+  //   3. Divergência ≤5%  → confirma Yahoo
+  //   4. Divergência >5%  → substitui pelo TV (única fonte externa disponível)
+  const tvOnlyClose = (a: number | null, b: number | null) => {
+    if (a == null || b == null) return false;
+    const d = Math.max(Math.abs(a), Math.abs(b));
+    return d === 0 ? true : Math.abs(a - b) / d <= 0.05;
+  };
+  const tvOnlyFields: (keyof typeof yahooValues)[] = ["ebitda", "netIncome", "earningsGrowthYoY", "freeCashflow"];
+  for (const key of tvOnlyFields) {
+    const tvVal = (tvIndicators as any)?.[key] as number | null ?? null;
+    if (tvVal == null) continue;
+    const yahooVal = yahooValues[key];
+    const sources = [{ source: "tradingview", value: tvVal }];
+    if (yahooVal == null) {
+      // caso 2: Yahoo null → usa TV
+      console.log(`  [tradingview] ${key}: Yahoo=null → TV=${tvVal}`);
+      rec[key] = { final: tvVal, changed: true, sources };
+    } else if (tvOnlyClose(yahooVal, tvVal)) {
+      // caso 3: confirmado (±5%) → mantém Yahoo
+      rec[key] = { final: yahooVal, changed: false, sources };
+    } else {
+      // caso 4: divergência >5% → substitui pelo TV
+      console.log(`  [tradingview] 🔄 ${key}: Yahoo=${yahooVal} TV=${tvVal} → substituído pelo TV`);
+      rec[key] = { final: tvVal, changed: true, sources };
+    }
+  }
+
   // Helper: usa valor reconciliado se disponível, senão mantém o Yahoo
   const R = (key: keyof typeof yahooValues): number | null =>
     rec[key] !== undefined ? rec[key].final : yahooValues[key];
+
+  //console.log('rec-depois', JSON.stringify(rec, null, 2));
 
   /**
    * Monta o objeto de rastreabilidade de fontes para um campo reconciliável.
@@ -492,7 +575,6 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
       returnOnEquity_sources: S("roe"),
       returnOnAssets: R("roa"),
       returnOnAssets_sources: S("roa"),
-      returnOnInvestedCapital: R("roic"),
       roic_sources: S("roic"),
       profitMargins: R("margemLiquida"),
       profitMargins_sources: S("margemLiquida"),
@@ -502,19 +584,24 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
     divida: {
       totalDebt,
       totalCash,
-      ebitda,
+      ebitda: R("ebitda"),
+      ebitda_sources: S("ebitda"),
       debtToEquity: n(fd?.debtToEquity),
       currentRatio: R("liqCorrente"),
       currentRatio_sources: S("liqCorrente"),
       dividaEbitda: R("dividaEbitda"),
       dividaEbitda_sources: S("dividaEbitda"),
       quickRatio: n(fd?.quickRatio),
-      freeCashflow: n(fd?.freeCashflow),
+      freeCashflow: R("freeCashflow"),
+      freeCashflow_sources: S("freeCashflow"),
       operatingCashflow: n(fd?.operatingCashflow),
     },
     crescimento: {
       netIncomeAnual,
-      earningsGrowthYoY,
+      netIncome: R("netIncome"),
+      netIncome_sources: S("netIncome"),
+      earningsGrowthYoY: R("earningsGrowthYoY"),
+      earningsGrowthYoY_sources: S("earningsGrowthYoY"),
       revenueGrowthYoY: n(fd?.revenueGrowth),
       earningsTrend,
     },
@@ -538,7 +625,24 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
 function buildRecommendations(quote: any, qs: any, tvRec?: TVRecommendations) {
   const fd = qs?.financialData ?? {};
   const raw = qs?.recommendationTrend?.trend ?? [];
-  const trends = raw
+  // Normaliza para UPPERCASE para comparações case-insensitive
+  const tvKey = tvRec?.recommendationKey ?? null;
+  const tvKeyUpper = tvKey?.toUpperCase() ?? null;
+
+  const yahooKey = quote?.recommendationKey ?? fd?.recommendationKey ?? null;
+  const yahooKeyUpper = yahooKey?.toUpperCase() ?? null;
+
+  // ── Mapeamento TV recommendationKey (UPPERCASE) → campo do trend Yahoo ──
+  const tvKeyToTrendField: Record<string, string> = {
+    "STRONG_BUY":   "strongBuy",
+    "BUY":          "buy",
+    "HOLD":         "hold",
+    "UNDERPERFORM": "sell",
+    "SELL":         "strongSell",
+  };
+  const tvTrendField = tvKeyUpper ? (tvKeyToTrendField[tvKeyUpper] ?? null) : null;
+
+  const rawTrends = raw
     .filter((p: any) => {
       if (!p?.period?.includes("m")) return false;
       const t = (p.strongBuy ?? 0) + (p.buy ?? 0) + (p.hold ?? 0) + (p.sell ?? 0) + (p.strongSell ?? 0);
@@ -546,20 +650,38 @@ function buildRecommendations(quote: any, qs: any, tvRec?: TVRecommendations) {
     })
     .sort((a: any, b: any) => parseInt(a.period) - parseInt(b.period));
 
-  const yahooKey = quote?.recommendationKey ?? fd?.recommendationKey ?? null;
+  // ── Injeta voto do TV na trend mais recente (+1 no campo correspondente) ──
+  // TV conta como +1 analista: soma da última trend = numberOfAnalystOpinions
+  const trends = rawTrends.map((p: any, i: number) => {
+    if (i !== rawTrends.length - 1 || !tvTrendField) return p;
+    const updated = { ...p, [tvTrendField]: (p[tvTrendField] ?? 0) + 1 };
+    console.log(`  [tradingview] trend[${p.period}].${tvTrendField} +1 (TV=${tvKey})`);
+    return updated;
+  });
 
-  // TV como fallback quando Yahoo não retorna recommendationKey
-  const recommendationKey = yahooKey ?? tvRec?.recommendationKey ?? null;
-
-  if (!yahooKey && tvRec?.recommendationKey) {
-    console.log(`  [tradingview] recommendationKey: Yahoo=null → TV=${tvRec.recommendationKey}`);
-  } else if (yahooKey && tvRec?.recommendationKey && yahooKey !== tvRec.recommendationKey) {
-    console.log(`  [tradingview] recommendationKey: Yahoo=${yahooKey} TV=${tvRec.recommendationKey} — divergência`);
+  // ── Reconciliação recommendationKey (comparação UPPERCASE) ───
+  let recommendationKey: string | null;
+  if (!yahooKeyUpper && tvKeyUpper) {
+    recommendationKey = tvKey;
+    console.log(`  [tradingview] recommendationKey: Yahoo=null → ✅ TV=${tvKey}`);
+  } else if (yahooKeyUpper && tvKeyUpper && yahooKeyUpper !== tvKeyUpper) {
+    recommendationKey = yahooKey;
+    console.log(`  [tradingview] recommendationKey: Yahoo=${yahooKey} TV=${tvKey} — divergência, mantém Yahoo`);
+  } else {
+    recommendationKey = yahooKey ?? null;
+    console.log(`  [tradingview] recommendationKey: Yahoo=${yahooKey ?? "null"} TV=${tvKey ?? "null"} — ${yahooKeyUpper && tvKeyUpper ? "✅ confirmado" : "sem TV"}`);
   }
+
+  // ── numberOfAnalystOpinions = soma da última trend após injeção do TV ──
+  // Garante que totalAnalistas bate com a soma dos campos da trend mais recente
+  const lastTrend = trends.at(-1);
+  const numberOfAnalystOpinions = lastTrend
+    ? (lastTrend.strongBuy ?? 0) + (lastTrend.buy ?? 0) + (lastTrend.hold ?? 0) + (lastTrend.sell ?? 0) + (lastTrend.strongSell ?? 0)
+    : n(fd?.numberOfAnalystOpinions);
 
   return {
     recommendationKey,
-    numberOfAnalystOpinions: n(fd?.numberOfAnalystOpinions),
+    numberOfAnalystOpinions,
     trends,
     // Scores do TradingView (componentes independentes — osciladores + médias móveis)
     tv: tvRec ?? null,
@@ -609,6 +731,47 @@ export async function fetchAllData(rawTicker: string): Promise<Record<string, un
 
   const technical = candles ? buildTechnical(candles) : null;
   console.log(`  ${technical ? `✅ candles: ${candles!.length} pregões, preço=${technical.price}` : "❌ sem dados técnicos"}`);
+
+  // ── Reconciliação técnica Yahoo × TV (±5%) ───────────────────────────────
+  // rsi14, macd, macdSignal, macdHist: calculados dos candles do Yahoo,
+  // comparados com os valores pré-calculados pelo TV antes de montar o retorno.
+  if (technical && tvAll?.technicals) {
+    const tvTech = tvAll.technicals;
+    const tvClose = (a: number | null, b: number | null) => {
+      if (a == null || b == null) return false;
+      const d = Math.max(Math.abs(a), Math.abs(b));
+      return d === 0 ? true : Math.abs(a - b) / d <= 0.05;
+    };
+    // precision: mesma usada no cálculo Yahoo (rsi14=2 casas, macd*=4 casas)
+    const techFields: { key: keyof typeof technical; tvVal: number | null; precision: number }[] = [
+      { key: "rsi14",      tvVal: tvTech.rsi14,      precision: 2 },
+      { key: "macd",       tvVal: tvTech.macd,       precision: 4 },
+      { key: "macdSignal", tvVal: tvTech.macdSignal, precision: 4 },
+      { key: "macdHist",   tvVal: tvTech.macdHist,   precision: 4 },
+    ];
+    const results: string[] = [];
+    for (const { key, tvVal, precision } of techFields) {
+      const yahooVal = technical[key] as number | null;
+      const fmt = (v: number) => v.toFixed(precision);
+      const rounded = (v: number) => +v.toFixed(precision);
+      if (tvVal == null) {
+        results.push(`${key}: TV=null (mantém Yahoo=${yahooVal != null ? fmt(yahooVal) : "null"})`);
+        continue;
+      }
+      if (yahooVal == null) {
+        (technical as any)[key] = rounded(tvVal);
+        results.push(`${key}: Yahoo=null → ✅ TV=${fmt(tvVal)}`);
+      } else if (!tvClose(yahooVal, tvVal)) {
+        (technical as any)[key] = rounded(tvVal);
+        const pct = (Math.abs(yahooVal - tvVal) / Math.max(Math.abs(yahooVal), Math.abs(tvVal)) * 100).toFixed(1);
+        results.push(`${key}: 🔄 Yahoo=${fmt(yahooVal)} TV=${fmt(tvVal)} diff=${pct}% → TV`);
+      } else {
+        const pct = (Math.abs(yahooVal - tvVal) / Math.max(Math.abs(yahooVal), Math.abs(tvVal)) * 100).toFixed(1);
+        results.push(`${key}: ✅ Yahoo=${fmt(yahooVal)} TV=${fmt(tvVal)} diff=${pct}%`);
+      }
+    }
+    console.log(`  [tradingview] tech reconciliação:\n    ${results.join("\n    ")}`);
+  }
 
   // Comparação técnica Yahoo × TradingView: injeta tvComparison no objeto technical
   const tvTechComparison = (technical && tvAll?.technicals)

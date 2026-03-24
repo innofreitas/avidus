@@ -22,7 +22,7 @@ export async function analyzeStockHandler(req: Request, res: Response): Promise<
     if (cached) console.warn(`⚠️  Cache inválido para ${ticker} — rebuscando`);
     try {
       rawData = await fetchAllData(ticker);
-      console.log("rawData", JSON.stringify(rawData, null, 2));
+      //console.log("rawData", JSON.stringify(rawData, null, 2));
       if (!isValidRawData(rawData)) {
         res.status(502).json({ success: false, error: { message: `Yahoo Finance não retornou dados para ${ticker}. Verifique o ticker (ex: PETR4.SA, AAPL).` } });
         return;

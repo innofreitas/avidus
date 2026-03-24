@@ -12,31 +12,15 @@ function classify(value: number | null, ranges: { min: number; label: string }[]
 
 const mean = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
-function emaSeries(arr: number[], period: number): number[] {
-  const k = 2 / (period + 1);
-  return arr.reduce((out: number[], v, i) => {
-    out.push(i === 0 ? v : v * k + out[i - 1] * (1 - k));
-    return out;
-  }, []);
-}
-
 // ─── Análise Técnica ──────────────────────────────────────────
 
-function calcRSI(closes: number[], period = 14) {
-  if (closes.length < period + 1) return { value: null, interpretation: "Dados insuficientes" };
-  const deltas = closes.slice(1).map((c, i) => c - closes[i]);
-  const slice  = deltas.slice(-period);
-  const gains  = slice.filter((d) => d > 0);
-  const losses = slice.filter((d) => d < 0).map(Math.abs);
-  const ag = gains.length  ? mean(gains)  : 0;
-  const al = losses.length ? mean(losses) : 0;
-  const rs  = al === 0 ? 100 : ag / al;
-  const rsi = +(100 - 100 / (1 + rs)).toFixed(2);
+function calcRSI(rsiValue: number | null) {
+  if (rsiValue == null) return { value: null, interpretation: "Dados insuficientes" };
   const interpretation =
-    rsi >= 70 ? "🔴 Sobrecomprado" :
-    rsi <= 30 ? "🟢 Sobrevendido"  :
-    rsi >= 60 ? "🟡 Levemente alto" : "🟢 Neutro";
-  return { value: rsi, interpretation };
+    rsiValue >= 70 ? "🔴 Sobrecomprado" :
+    rsiValue <= 30 ? "🟢 Sobrevendido"  :
+    rsiValue >= 60 ? "🟡 Levemente alto" : "🟢 Neutro";
+  return { value: rsiValue, interpretation };
 }
 
 function calcMovingAverages(closes: number[], mm20: number | null, mm50: number | null, mm200: number | null) {
@@ -68,18 +52,10 @@ function calcMovingAverages(closes: number[], mm20: number | null, mm50: number 
   };
 }
 
-function calcMACD(closes: number[]) {
-  if (closes.length < 26) return { macdLine: null, signalLine: null, histogram: null, interpretation: "Dados insuficientes" };
-  const ema12 = emaSeries(closes, 12);
-  const ema26 = emaSeries(closes, 26);
-  const macdLine = ema12.map((v, i) => v - ema26[i]).slice(25);
-  const signalLine = emaSeries(macdLine, 9);
-  const idx  = macdLine.length - 1;
-  const macd = +macdLine[idx].toFixed(4);
-  const sig  = +signalLine[idx].toFixed(4);
-  const hist = +(macd - sig).toFixed(4);
+function calcMACD(macd: number | null, signal: number | null, hist: number | null) {
+  if (macd == null || signal == null || hist == null) return { macdLine: null, signalLine: null, histogram: null, interpretation: "Dados insuficientes" };
   return {
-    macdLine: macd, signalLine: sig, histogram: hist,
+    macdLine: macd, signalLine: signal, histogram: hist,
     interpretation:
       macd > 0 && hist > 0 ? "🟢 Bullish — MACD positivo e acelerando" :
       macd > 0 && hist < 0 ? "🟡 Bullish fraco — MACD positivo mas desacelerando" :
@@ -88,7 +64,7 @@ function calcMACD(closes: number[]) {
   };
 }
 
-function calcTrend(closes: number[], candles: any[], mm20: number | null, mm50: number | null, mm200: number | null, slope20Pct: number | null, adxProxy: number | null) {
+function calcTrend(closes: number[], mm20: number | null, mm50: number | null, mm200: number | null, slope20Pct: number | null, adxProxy: number | null) {
   const price   = closes.at(-1)!;
   const vol20   = closes.slice(-20);
   const vol20Pct = vol20.length > 1
@@ -167,10 +143,10 @@ export function analyzeTechnical(tech: any, currency = "BRL") {
   return {
     price:          +closes.at(-1).toFixed(2),
     dataRange:      tech.dataRange,
-    rsi:            calcRSI(closes),
+    rsi:            calcRSI(tech.rsi14),
     movingAverages: calcMovingAverages(closes, mm20, mm50, mm200),
-    macd:           calcMACD(closes),
-    trend:          calcTrend(closes, candles, mm20, mm50, mm200, slope20Pct, adxProxy),
+    macd:           calcMACD(tech.macd, tech.macdSignal, tech.macdHist),
+    trend:          calcTrend(closes, mm20, mm50, mm200, slope20Pct, adxProxy),
     volatility:     calcVolatility(logReturns),
     maxDrawdown:    calcDrawdown(drawdown),
     breakout52w:    calcBreakout(candles, high52w, low52w),
