@@ -395,16 +395,16 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
   // Converte tvIndicators para ScrapedFundamentals (fonte adicional com mesmo peso
   // que os scrapers na função reconcile() do scraperService).
   const tvSource: ScrapedFundamentals | null = tvIndicators ? {
-    source:        "tradingview",
-    pl:            tvIndicators.pl,
-    dy:            tvIndicators.dy,
-    roe:           tvIndicators.roe,
-    roa:           tvIndicators.roa,
-    roic:          tvIndicators.roic,
+    source: "tradingview",
+    pl: tvIndicators.pl,
+    dy: tvIndicators.dy,
+    roe: tvIndicators.roe,
+    roa: tvIndicators.roa,
+    roic: tvIndicators.roic,
     margemLiquida: tvIndicators.margemLiquida,
-    liqCorrente:   tvIndicators.liqCorrente,
-    dividaEbitda:  tvIndicators.dividaEbitda,
-    evEbit:        tvIndicators.evEbit,
+    liqCorrente: tvIndicators.liqCorrente,
+    dividaEbitda: tvIndicators.dividaEbitda,
+    evEbit: tvIndicators.evEbit,
   } : null;
 
   let rec: Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }> = {};
@@ -424,12 +424,12 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
       const d = Math.max(Math.abs(a), Math.abs(b));
       return d === 0 ? true : Math.abs(a - b) / d <= 0.05;
     };
-    const tvFields = ["pl","dy","roe","roa","roic","margemLiquida","liqCorrente","dividaEbitda","evEbit"] as const;
+    const tvFields = ["pl", "dy", "roe", "roa", "roic", "margemLiquida", "liqCorrente", "dividaEbitda", "evEbit"] as const;
     for (const key of tvFields) {
-      const tvVal  = tvSource[key] ?? null;
+      const tvVal = tvSource[key] ?? null;
       if (tvVal == null) continue;
       const yahooVal = yahooValues[key as keyof typeof yahooValues];
-      const sources  = [{ source: "tradingview", value: tvVal }];
+      const sources = [{ source: "tradingview", value: tvVal }];
       if (yahooVal == null) {
         console.log(`  [tradingview] ${key}: Yahoo=null → TV=${tvVal}`);
         rec[key] = { final: tvVal, changed: true, sources };

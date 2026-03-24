@@ -5,27 +5,27 @@
  * Lógica de cada função espelha exatamente o testScraper final aprovado.
  */
 
-import axios       from "axios";
+import axios from "axios";
 import * as cheerio from "cheerio";
-import * as iconv  from "iconv-lite";
+import * as iconv from "iconv-lite";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
 export interface ScrapedFundamentals {
-  source:         string;
-  price?:         number | null;
-  pl?:            number | null;
-  pvp?:           number | null;
-  dy?:            number | null;
-  payout?:        number | null;
+  source: string;
+  price?: number | null;
+  pl?: number | null;
+  pvp?: number | null;
+  dy?: number | null;
+  payout?: number | null;
   margemLiquida?: number | null;
-  roe?:           number | null;
-  roa?:           number | null;
-  roic?:          number | null;   // ratio 0-1
-  liqCorrente?:   number | null;
-  pegRatio?:      number | null;
-  dividaEbitda?:  number | null;
-  evEbit?:        number | null;   // valor absoluto
+  roe?: number | null;
+  roa?: number | null;
+  roic?: number | null;   // ratio 0-1
+  liqCorrente?: number | null;
+  pegRatio?: number | null;
+  dividaEbitda?: number | null;
+  evEbit?: number | null;   // valor absoluto
 }
 
 // ─── HTTP client ──────────────────────────────────────────────
@@ -33,19 +33,19 @@ export interface ScrapedFundamentals {
 const client = axios.create({
   timeout: 15000,
   headers: {
-    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
-    "Cache-Control":   "no-cache",
-    "Pragma":          "no-cache",
-    "Referer":         "https://www.google.com/",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Referer": "https://www.google.com/",
     "Upgrade-Insecure-Requests": "1",
-    "sec-ch-ua":        '"Chromium";v="122", "Not(A:Brand";v="24"',
+    "sec-ch-ua": '"Chromium";v="122", "Not(A:Brand";v="24"',
     "sec-ch-ua-mobile": "?0",
-    "sec-fetch-dest":   "document",
-    "sec-fetch-mode":   "navigate",
-    "sec-fetch-site":   "none",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "none",
   },
   maxRedirects: 5,
   decompress: true,
@@ -95,22 +95,22 @@ function parsePct(raw: string | null | undefined): number | null {
 //   children[1] = value
 
 const I10_MAP: Record<string, string> = {
-  "P/L":                     "pl",
-  "P/VP":                    "pvp",
-  "DIVIDEND YIELD":          "dy",
-  "DY":                      "dy",
-  "PAYOUT":                  "payout",
-  "MARGEM LÍQUIDA":          "margemLiquida",
-  "MARGEM LIQUIDA":          "margemLiquida",
-  "ROE":                     "roe",
-  "ROA":                     "roa",
-  "ROIC":                    "roic",
-  "LIQUIDEZ CORRENTE":       "liqCorrente",
-  "LIQ. CORRENTE":           "liqCorrente",
-  "DÍVIDA LÍQUIDA/EBITDA":   "dividaEbitda",
+  "P/L": "pl",
+  "P/VP": "pvp",
+  "DIVIDEND YIELD": "dy",
+  "DY": "dy",
+  "PAYOUT": "payout",
+  "MARGEM LÍQUIDA": "margemLiquida",
+  "MARGEM LIQUIDA": "margemLiquida",
+  "ROE": "roe",
+  "ROA": "roa",
+  "ROIC": "roic",
+  "LIQUIDEZ CORRENTE": "liqCorrente",
+  "LIQ. CORRENTE": "liqCorrente",
+  "DÍVIDA LÍQUIDA/EBITDA": "dividaEbitda",
   "DÍVIDA LÍQUIDA / EBITDA": "dividaEbitda",
-  "EV/EBIT":                 "evEbit",
-  "EV / EBIT":               "evEbit",
+  "EV/EBIT": "evEbit",
+  "EV / EBIT": "evEbit",
 };
 const I10_PCT = new Set(["dy", "payout", "margemLiquida", "roe", "roa", "roic"]);
 
@@ -129,7 +129,7 @@ export async function scrapeInvestidor10(ticket: string): Promise<ScrapedFundame
   const tableIndicators = $("#table-indicators");
 
   tableIndicators.find("div, span").each((_, element) => {
-    const $el      = $(element);
+    const $el = $(element);
     const children = $el.children();
     if (children.length < 2) return;
     // Remove sufixo " - TICKER" (ex: "DIVIDEND YIELD - PETR4" → "DIVIDEND YIELD")
@@ -144,19 +144,19 @@ export async function scrapeInvestidor10(ticket: string): Promise<ScrapedFundame
   });
 
   return {
-    source:        "investidor10",
+    source: "investidor10",
     price,
-    pl:            record["pl"]            ?? null,
-    pvp:           record["pvp"]           ?? null,
-    dy:            record["dy"]            ?? null,
-    payout:        record["payout"]        ?? null,
+    pl: record["pl"] ?? null,
+    pvp: record["pvp"] ?? null,
+    dy: record["dy"] ?? null,
+    payout: record["payout"] ?? null,
     margemLiquida: record["margemLiquida"] ?? null,
-    roe:           record["roe"]           ?? null,
-    roa:           record["roa"]           ?? null,
-    roic:          record["roic"]          ?? null,
-    liqCorrente:   record["liqCorrente"]   ?? null,
-    dividaEbitda:  record["dividaEbitda"]  ?? null,
-    evEbit:        record["evEbit"]        ?? null,
+    roe: record["roe"] ?? null,
+    roa: record["roa"] ?? null,
+    roic: record["roic"] ?? null,
+    liqCorrente: record["liqCorrente"] ?? null,
+    dividaEbitda: record["dividaEbitda"] ?? null,
+    evEbit: record["evEbit"] ?? null,
   };
 }
 
@@ -167,21 +167,21 @@ export async function scrapeInvestidor10(ticket: string): Promise<ScrapedFundame
 // Indicadores: 3ª table.w728 → span.txt como label + next td → span.txt como valor
 
 const FUND_MAP: Record<string, { key: string; pct: boolean }> = {
-  "p/l":            { key: "pl",            pct: false },
-  "p/vp":           { key: "pvp",           pct: false },
-  "div.yield":      { key: "dy",            pct: true  },
-  "div. yield":     { key: "dy",            pct: true  },
-  "dividend yield": { key: "dy",            pct: true  },
-  "marg. líquida":  { key: "margemLiquida", pct: true  },
-  "marg. liquida":  { key: "margemLiquida", pct: true  },
-  "roe":            { key: "roe",           pct: true  },
-  "roa":            { key: "roa",           pct: true  },
-  "roic":           { key: "roic",          pct: true  },
-  "liq. corrente":  { key: "liqCorrente",   pct: false },
-  "liquidez corr":  { key: "liqCorrente",   pct: false },
-  "liquidez corr.": { key: "liqCorrente",   pct: false },
-  "ev/ebit":        { key: "evEbit",        pct: false },
-  "ev / ebit":      { key: "evEbit",        pct: false },
+  "p/l": { key: "pl", pct: false },
+  "p/vp": { key: "pvp", pct: false },
+  "div.yield": { key: "dy", pct: true },
+  "div. yield": { key: "dy", pct: true },
+  "dividend yield": { key: "dy", pct: true },
+  "marg. líquida": { key: "margemLiquida", pct: true },
+  "marg. liquida": { key: "margemLiquida", pct: true },
+  "roe": { key: "roe", pct: true },
+  "roa": { key: "roa", pct: true },
+  "roic": { key: "roic", pct: true },
+  "liq. corrente": { key: "liqCorrente", pct: false },
+  "liquidez corr": { key: "liqCorrente", pct: false },
+  "liquidez corr.": { key: "liqCorrente", pct: false },
+  "ev/ebit": { key: "evEbit", pct: false },
+  "ev / ebit": { key: "evEbit", pct: false },
 };
 
 export async function scrapeFundamentus(ticket: string): Promise<ScrapedFundamentals | null> {
@@ -192,8 +192,8 @@ export async function scrapeFundamentus(ticket: string): Promise<ScrapedFundamen
   const $ = cheerio.load(html);
 
   const allTables = $("div.conteudo table.w728");
-  const table1    = allTables.eq(0);  // 1ª → Cotação
-  const table3    = allTables.eq(2);  // 3ª → Indicadores fundamentalistas
+  const table1 = allTables.eq(0);  // 1ª → Cotação
+  const table3 = allTables.eq(2);  // 3ª → Indicadores fundamentalistas
 
   // Cotação
   let price: number | null = null;
@@ -208,25 +208,25 @@ export async function scrapeFundamentus(ticket: string): Promise<ScrapedFundamen
   const record: Record<string, number | null> = {};
   table3.find("span.txt").each((_, el) => {
     const text = $(el).text().trim().toLowerCase();
-    const cfg  = FUND_MAP[text];
+    const cfg = FUND_MAP[text];
     if (!cfg) return;
-    const value  = $(el).closest("td").next("td").find("span.txt").first().text().trim();
+    const value = $(el).closest("td").next("td").find("span.txt").first().text().trim();
     const parsed = cfg.pct ? parsePct(value) : parseNum(value);
     if (parsed != null) record[cfg.key] = parsed;
   });
 
   return {
-    source:        "fundamentus",
+    source: "fundamentus",
     price,
-    pl:            record["pl"]            ?? null,
-    pvp:           record["pvp"]           ?? null,
-    dy:            record["dy"]            ?? null,
+    pl: record["pl"] ?? null,
+    pvp: record["pvp"] ?? null,
+    dy: record["dy"] ?? null,
     margemLiquida: record["margemLiquida"] ?? null,
-    roe:           record["roe"]           ?? null,
-    roa:           record["roa"]           ?? null,
-    roic:          record["roic"]          ?? null,
-    liqCorrente:   record["liqCorrente"]   ?? null,
-    evEbit:        record["evEbit"]        ?? null,
+    roe: record["roe"] ?? null,
+    roa: record["roa"] ?? null,
+    roic: record["roic"] ?? null,
+    liqCorrente: record["liqCorrente"] ?? null,
+    evEbit: record["evEbit"] ?? null,
   };
 }
 
@@ -239,25 +239,25 @@ export async function scrapeFundamentus(ticket: string): Promise<ScrapedFundamen
 // Payout     : API JSON GET /acao/payoutresult?code=X&type=0 → actual_F
 
 const SI_MAP: Record<string, { key: string; pct: boolean }> = {
-  "p/l":                   { key: "pl",            pct: false },
-  "p/vp":                  { key: "pvp",           pct: false },
-  "d.y":                   { key: "dy",            pct: true  },
-  "dividend yield":        { key: "dy",            pct: true  },
-  "peg ratio":             { key: "pegRatio",      pct: false },
-  "m.líquida":             { key: "margemLiquida", pct: true  },
-  "m. líquida":            { key: "margemLiquida", pct: true  },
-  "m.liquida":             { key: "margemLiquida", pct: true  },
-  "m. liquida":            { key: "margemLiquida", pct: true  },
-  "margem líquida":        { key: "margemLiquida", pct: true  },
-  "dív. líquida/ebitda":   { key: "dividaEbitda",  pct: false },
-  "dívida líquida/ebitda": { key: "dividaEbitda",  pct: false },
-  "roe":                   { key: "roe",           pct: true  },
-  "roa":                   { key: "roa",           pct: true  },
-  "roic":                  { key: "roic",          pct: true  },
-  "liq. corrente":         { key: "liqCorrente",   pct: false },
-  "liquidez corrente":     { key: "liqCorrente",   pct: false },
-  "ev/ebit":               { key: "evEbit",        pct: false },
-  "ev / ebit":             { key: "evEbit",        pct: false },
+  "p/l": { key: "pl", pct: false },
+  "p/vp": { key: "pvp", pct: false },
+  "d.y": { key: "dy", pct: true },
+  "dividend yield": { key: "dy", pct: true },
+  "peg ratio": { key: "pegRatio", pct: false },
+  "m.líquida": { key: "margemLiquida", pct: true },
+  "m. líquida": { key: "margemLiquida", pct: true },
+  "m.liquida": { key: "margemLiquida", pct: true },
+  "m. liquida": { key: "margemLiquida", pct: true },
+  "margem líquida": { key: "margemLiquida", pct: true },
+  "dív. líquida/ebitda": { key: "dividaEbitda", pct: false },
+  "dívida líquida/ebitda": { key: "dividaEbitda", pct: false },
+  "roe": { key: "roe", pct: true },
+  "roa": { key: "roa", pct: true },
+  "roic": { key: "roic", pct: true },
+  "liq. corrente": { key: "liqCorrente", pct: false },
+  "liquidez corrente": { key: "liqCorrente", pct: false },
+  "ev/ebit": { key: "evEbit", pct: false },
+  "ev / ebit": { key: "evEbit", pct: false },
 };
 
 const cleanTitle = (raw: string | undefined) =>
@@ -270,7 +270,7 @@ export async function scrapeStatusInvest(ticket: string): Promise<ScrapedFundame
 
   const $ = cheerio.load(html);
 
-  const container  = $(".indicator-today-container");
+  const container = $(".indicator-today-container");
   const indicators = container.find(".indicators");
 
   // Cotação
@@ -283,10 +283,10 @@ export async function scrapeStatusInvest(ticket: string): Promise<ScrapedFundame
   // 1. Indicadores via a[title="Artigo detalhando X"] + <strong> irmão
   indicators.find("a[title]").each((_, el) => {
     const title = cleanTitle($(el).attr("title"));
-    const cfg   = SI_MAP[title];
+    const cfg = SI_MAP[title];
     if (!cfg) return;
-    const value  = $(el).nextAll("strong").first().text().trim()
-                || $(el).parent().find("strong").first().text().trim();
+    const value = $(el).nextAll("strong").first().text().trim()
+      || $(el).parent().find("strong").first().text().trim();
     const parsed = cfg.pct ? parsePct(value) : parseNum(value);
     if (parsed != null) record[cfg.key] = parsed;
   });
@@ -294,8 +294,8 @@ export async function scrapeStatusInvest(ticket: string): Promise<ScrapedFundame
   // 2. PEG Ratio — h3.title contendo "peg" + <strong> irmão
   indicators.find("h3.title").each((_, el) => {
     if (!$(el).text().toLowerCase().includes("peg")) return;
-    const value  = $(el).nextAll("strong").first().text().trim()
-                || $(el).parent().find("strong").first().text().trim();
+    const value = $(el).nextAll("strong").first().text().trim()
+      || $(el).parent().find("strong").first().text().trim();
     const parsed = parseNum(value);
     if (parsed != null) record["pegRatio"] = parsed;
     return false as any;
@@ -303,32 +303,32 @@ export async function scrapeStatusInvest(ticket: string): Promise<ScrapedFundame
 
   // 3. Payout — API JSON direta
   try {
-    const res  = await client.get(
+    const res = await client.get(
       `https://statusinvest.com.br/acao/payoutresult?code=${bare}&type=0`,
       { responseType: "json", headers: { "X-Requested-With": "XMLHttpRequest" } }
     );
     const actualF = res.data?.actual_F ?? res.data?.data?.actual_F ?? null;
-    const parsed  = parsePct(String(actualF ?? ""));
+    const parsed = parsePct(String(actualF ?? ""));
     if (parsed != null) record["payout"] = parsed;
   } catch {
     // payout opcional — ignora silenciosamente
   }
 
   return {
-    source:        "statusinvest",
+    source: "statusinvest",
     price,
-    pl:            record["pl"]            ?? null,
-    pvp:           record["pvp"]           ?? null,
-    dy:            record["dy"]            ?? null,
-    payout:        record["payout"]        ?? null,
+    pl: record["pl"] ?? null,
+    pvp: record["pvp"] ?? null,
+    dy: record["dy"] ?? null,
+    payout: record["payout"] ?? null,
     margemLiquida: record["margemLiquida"] ?? null,
-    roe:           record["roe"]           ?? null,
-    roa:           record["roa"]           ?? null,
-    roic:          record["roic"]          ?? null,
-    liqCorrente:   record["liqCorrente"]   ?? null,
-    pegRatio:      record["pegRatio"]      ?? null,
-    dividaEbitda:  record["dividaEbitda"]  ?? null,
-    evEbit:        record["evEbit"]        ?? null,
+    roe: record["roe"] ?? null,
+    roa: record["roa"] ?? null,
+    roic: record["roic"] ?? null,
+    liqCorrente: record["liqCorrente"] ?? null,
+    pegRatio: record["pegRatio"] ?? null,
+    dividaEbitda: record["dividaEbitda"] ?? null,
+    evEbit: record["evEbit"] ?? null,
   };
 }
 
@@ -338,7 +338,7 @@ const TOLERANCE = 0.05;
 
 function close(a: number | null, b: number | null): boolean {
   if (a == null || b == null) return false;
-  if (a === 0 && b === 0)    return true;
+  if (a === 0 && b === 0) return true;
   return Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b)) <= TOLERANCE;
 }
 
@@ -348,21 +348,21 @@ function reconcile(
   scraped: ScrapedFundamentals[]
 ): { final: number | null; changed: boolean; mediaUsed: boolean; sources: { source: string; value: number | null }[] } {
   const sources = scraped.map(s => ({ source: s.source, value: (s as any)[key] as number | null }));
-  const valid   = sources.filter(s => s.value != null);
- 
+  const valid = sources.filter(s => s.value != null);
+
   // Nenhuma fonte externa tem valor → mantém o Yahoo (mesmo que null)
   if (!valid.length) return { final: yahoo, changed: false, mediaUsed: false, sources };
- 
+
   // Yahoo é null → usa a média das fontes externas disponíveis
   if (yahoo == null) {
     const media = valid.reduce((sum, s) => sum + s.value!, 0) / valid.length;
     return { final: +media.toFixed(6), changed: true, mediaUsed: true, sources };
   }
- 
+
   // Yahoo confirmado por ao menos 1 fonte (±5%) → mantém o Yahoo
   if (valid.some(s => close(yahoo, s.value)))
     return { final: yahoo, changed: false, mediaUsed: false, sources };
- 
+
   // Yahoo diverge de todas as fontes → substitui pela média das fontes
   const media = valid.reduce((sum, s) => sum + s.value!, 0) / valid.length;
   return { final: +media.toFixed(6), changed: true, mediaUsed: true, sources };
@@ -370,7 +370,7 @@ function reconcile(
 
 export async function reconcileFundamentals(
   ticket: string,
-  yahoo: Partial<Record<"price"|"pl"|"pvp"|"dy"|"payout"|"margemLiquida"|"roe"|"roa"|"roic"|"liqCorrente"|"pegRatio"|"dividaEbitda"|"evEbit", number | null>>,
+  yahoo: Partial<Record<"price" | "pl" | "pvp" | "dy" | "payout" | "margemLiquida" | "roe" | "roa" | "roic" | "liqCorrente" | "pegRatio" | "dividaEbitda" | "evEbit", number | null>>,
   extraSources: ScrapedFundamentals[] = []
 ): Promise<Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }>> {
   const bare = ticket.replace(/\.SA$/i, "").toUpperCase();
@@ -384,15 +384,15 @@ export async function reconcileFundamentals(
   ]);
 
   const scraped = [
-    r10.status   === "fulfilled" ? r10.value   : null,
+    r10.status === "fulfilled" ? r10.value : null,
     rfund.status === "fulfilled" ? rfund.value : null,
-    rsi.status   === "fulfilled" ? rsi.value   : null,
+    rsi.status === "fulfilled" ? rsi.value : null,
     ...extraSources,
   ].filter((x): x is ScrapedFundamentals => x != null);
 
   console.log(`  [scraper] ✅ Fontes em ${Date.now() - t0}ms: ${scraped.map(s => s.source).join(", ") || "nenhuma"}`);
 
-  const FIELDS = ["price","pl","pvp","dy","payout","margemLiquida","roe","roa","roic","liqCorrente","pegRatio","dividaEbitda","evEbit"] as const;
+  const FIELDS = ["price", "pl", "pvp", "dy", "payout", "margemLiquida", "roe", "roa", "roic", "liqCorrente", "pegRatio", "dividaEbitda", "evEbit"] as const;
   const result: Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }> = {};
 
   for (const key of FIELDS) {
