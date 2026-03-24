@@ -208,7 +208,7 @@ export interface TVTechnicals {
  *   • technicals   — indicadores técnicos pré-calculados pelo TV
  *
  * Conversões de unidade aplicadas:
- *   ROE, ROA, ROIC, DY, EPS growth → TV retorna em % → convertidos para ratio (÷100)
+ *   ROE, ROA, ROIC, DY, EPS growth → TandingView retorna em % → convertidos para ratio (÷100)
  *   P/L, EV/EBIT, Dívida/EBITDA    → múltiplos diretos, sem conversão
  */
 export async function fetchTVAll(rawTicker: string): Promise<{ fundamentals: TVFundamentals; technicals: TVTechnicals; recommendations: TVRecommendations }> {

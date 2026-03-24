@@ -359,7 +359,7 @@ function reconcile(
     return { final: +media.toFixed(6), changed: true, mediaUsed: true, sources };
   }
 
-  // Yahoo confirmado por ao menos 1 fonte (±5%) → mantém o Yahoo
+  // Yahoo confirmado por ao menos 1 fonte (±5%) → mantém o Yahoo Finance
   if (valid.some(s => close(yahoo, s.value)))
     return { final: yahoo, changed: false, mediaUsed: false, sources };
 

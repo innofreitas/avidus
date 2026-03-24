@@ -247,7 +247,7 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
   const fin = ts?.financials ?? null; // Array v3 (financials)
   const bs = ts?.balanceSheet ?? null; // Array v3 (balance-sheet)
 
-  // earningsTrend.trend[] campos:
+  // earningsTrend.trend[] campos:  
   //   t.period          → "0q", "+1q", "0y", "+1y"
   //   t.growth          → crescimento realizado YoY para o período (número direto, ex: 0.15)
   //   t.earningsEstimate.growth → crescimento estimado de EPS
@@ -308,6 +308,8 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tv
   // 3ª opção: cálculo manual a partir da série netIncomeAnual (fundamentalsTimeSeries)
   // Usado apenas quando as fontes anteriores retornam null.
   // Guard: ano-base negativo ou zero → skip (crescimento seria matematicamente absurdo)
+
+  //4 - Comparar com TradingView
   if (earningsGrowthYoY == null && netIncomeAnual.length >= 2) {
     const prev = (netIncomeAnual as any[]).at(-2)?.value as number | null;
     const curr = (netIncomeAnual as any[]).at(-1)?.value as number | null;
