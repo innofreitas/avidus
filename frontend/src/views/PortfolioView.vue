@@ -6,8 +6,9 @@ import type { AnalysisResult, ProfileName } from "@/types";
 import { PROFILE_LABELS, PROFILE_ICONS, ALL_PROFILES } from "@/types";
 import { decisionColor, decisionBadgeClass, formatNumber } from "@/utils/formatters";
 import AnalysisDetail from "@/components/analysis/AnalysisDetail.vue";
-import AnalysisBarsi   from "@/components/analysis/AnalysisBarsi.vue";
-import AnalysisBuffett from "@/components/analysis/AnalysisBuffett.vue";
+import AnalysisBarsi        from "@/components/analysis/AnalysisBarsi.vue";
+import AnalysisBuffett      from "@/components/analysis/AnalysisBuffett.vue";
+import AnalysisMagicFormula from "@/components/analysis/AnalysisMagicFormula.vue";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -82,8 +83,9 @@ const filterTD     = ref("");
 const modalResult  = shallowRef<AnalysisResult | null>(null);
 const modalTicker  = ref("");
 const showModal    = ref(false);
-const showBarsi    = ref(false);
-const showBuffett  = ref(false);
+const showBarsi        = ref(false);
+const showBuffett      = ref(false);
+const showMagicFormula = ref(false);
 
 const activeTab    = ref<"acoes" | "etf" | "fundos" | "renda_fixa" | "tesouro">("acoes");
 
@@ -549,6 +551,14 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                  disabled:opacity-40 disabled:cursor-not-allowed">
           🏛️ Análise Buffett
         </button>
+        <!-- Botão Fórmula Mágica -->
+        <button @click="showMagicFormula = true"
+          :disabled="!acoes.some(r => r.recomendacao?.result != null)"
+          class="btn-secondary text-sm flex items-center gap-2 border border-purple-400 dark:border-purple-600
+                 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40
+                 disabled:opacity-40 disabled:cursor-not-allowed">
+          ✨ Fórmula Mágica
+        </button>
       </div>
 
       <div class="overflow-x-auto">
@@ -916,6 +926,13 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       v-if="showBuffett"
       :acoes="acoes"
       @close="showBuffett = false"
+    />
+
+    <!-- ── Modal Fórmula Mágica ───────────────────────────────── -->
+    <AnalysisMagicFormula
+      v-if="showMagicFormula"
+      :acoes="acoes"
+      @close="showMagicFormula = false"
     />
 
 </template>
