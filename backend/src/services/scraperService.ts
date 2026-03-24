@@ -370,7 +370,8 @@ function reconcile(
 
 export async function reconcileFundamentals(
   ticket: string,
-  yahoo: Partial<Record<"price"|"pl"|"pvp"|"dy"|"payout"|"margemLiquida"|"roe"|"roa"|"roic"|"liqCorrente"|"pegRatio"|"dividaEbitda"|"evEbit", number | null>>
+  yahoo: Partial<Record<"price"|"pl"|"pvp"|"dy"|"payout"|"margemLiquida"|"roe"|"roa"|"roic"|"liqCorrente"|"pegRatio"|"dividaEbitda"|"evEbit", number | null>>,
+  extraSources: ScrapedFundamentals[] = []
 ): Promise<Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }>> {
   const bare = ticket.replace(/\.SA$/i, "").toUpperCase();
   console.log(`  [scraper] 🔎 Scraping para ${bare}...`);
@@ -386,6 +387,7 @@ export async function reconcileFundamentals(
     r10.status   === "fulfilled" ? r10.value   : null,
     rfund.status === "fulfilled" ? rfund.value : null,
     rsi.status   === "fulfilled" ? rsi.value   : null,
+    ...extraSources,
   ].filter((x): x is ScrapedFundamentals => x != null);
 
   console.log(`  [scraper] ✅ Fontes em ${Date.now() - t0}ms: ${scraped.map(s => s.source).join(", ") || "nenhuma"}`);

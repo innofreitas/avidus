@@ -1,6 +1,7 @@
 // @ts-ignore
 import YahooFinance from "yahoo-finance2";
-import { reconcileFundamentals } from "./scraperService";
+import { reconcileFundamentals, type ScrapedFundamentals } from "./scraperService";
+import { fetchTVAll, type TVTechnicals, type TVFundamentals, type TVRecommendations } from "./tradingviewService";
 
 // Singleton — obrigatório no yahoo-finance2 v3
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -35,22 +36,22 @@ function normalizeDY(fromQuote: number | null, fromSD: number | null): number | 
 // ─── Busca de dados ───────────────────────────────────────────
 
 async function fetchCandles(ticker: string, days = 400) {
-  const now  = new Date();
+  const now = new Date();
   const from = new Date(now.getTime() - days * 86_400_000);
-  const res  = await yf.chart(ticker, { period1: from, period2: now, interval: "1d", includePrePost: false });
+  const res = await yf.chart(ticker, { period1: from, period2: now, interval: "1d", includePrePost: false });
   const quotes: any[] = res?.quotes ?? [];
   if (!quotes.length) throw new Error(`Sem candles para ${ticker}`);
 
   return quotes
     .filter((q: any) => q.close != null && q.high != null && q.low != null)
     .map((q: any) => ({
-      date:     q.date instanceof Date ? q.date.toISOString().slice(0, 10) : String(q.date).slice(0, 10),
-      open:     n(q.open),
-      high:     n(q.high),
-      low:      n(q.low),
-      close:    n(q.close),
+      date: q.date instanceof Date ? q.date.toISOString().slice(0, 10) : String(q.date).slice(0, 10),
+      open: n(q.open),
+      high: n(q.high),
+      low: n(q.low),
+      close: n(q.close),
       adjClose: n(q.adjclose ?? q.adjClose ?? q.close),
-      volume:   n(q.volume) ?? 0,
+      volume: n(q.volume) ?? 0,
     }));
 }
 
@@ -68,24 +69,24 @@ async function fetchQuoteSummary(ticker: string) {
 }
 
 async function fetchTimeSeries(ticker: string) {
-  const now  = new Date();
+  const now = new Date();
   const from = new Date(now.getFullYear() - 6, 0, 1);
   const base = { period1: from, period2: now, type: "annual" } as const;
 
   // v3 API: module='financials' returns array with fields netIncome, totalRevenue, EBITDA etc.
   //         module='balance-sheet' returns array with totalDebt, cashAndCashEquivalents etc.
   const [financials, balanceSheet] = await Promise.allSettled([
-    yf.fundamentalsTimeSeries(ticker, { ...base, module: "financials" }    as any),
+    yf.fundamentalsTimeSeries(ticker, { ...base, module: "financials" } as any),
     yf.fundamentalsTimeSeries(ticker, { ...base, module: "balance-sheet" } as any),
   ]);
 
   const safe = (r: PromiseSettledResult<any>) => r.status === "fulfilled" ? r.value : null;
 
   const fin = safe(financials);   // Array<{ date, netIncome, totalRevenue, EBITDA, ... }>
-  const bs  = safe(balanceSheet); // Array<{ date, totalDebt, cashAndCashEquivalents, ... }>
+  const bs = safe(balanceSheet); // Array<{ date, totalDebt, cashAndCashEquivalents, ... }>
 
   if (!fin) console.warn("  ⚠️  fundamentalsTimeSeries/financials falhou");
-  if (!bs)  console.warn("  ⚠️  fundamentalsTimeSeries/balance-sheet falhou");
+  if (!bs) console.warn("  ⚠️  fundamentalsTimeSeries/balance-sheet falhou");
 
   return { financials: fin, balanceSheet: bs };
 }
@@ -96,10 +97,10 @@ const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
 
 function buildTechnical(candles: any[]) {
   const closes = candles.map((c) => c.close as number);
-  const len    = closes.length;
+  const len = closes.length;
 
-  const mm20  = len >= 20  ? mean(closes.slice(-20))  : null;
-  const mm50  = len >= 50  ? mean(closes.slice(-50))  : null;
+  const mm20 = len >= 20 ? mean(closes.slice(-20)) : null;
+  const mm50 = len >= 50 ? mean(closes.slice(-50)) : null;
   const mm200 = len >= 200 ? mean(closes.slice(-200)) : null;
 
   const slope20Pct = len >= 22
@@ -110,9 +111,9 @@ function buildTechnical(candles: any[]) {
     ? mean(candles.slice(-20).map((c: any) => (c.high - c.low) / (c.close || 1))) * 100
     : null;
 
-  const w52   = candles.slice(-252);
+  const w52 = candles.slice(-252);
   const high52w = w52.length ? Math.max(...w52.map((c: any) => c.high)) : null;
-  const low52w  = w52.length ? Math.min(...w52.map((c: any) => c.low))  : null;
+  const low52w = w52.length ? Math.min(...w52.map((c: any) => c.low)) : null;
 
   const logReturns = len >= 2
     ? closes.slice(1).map((c, i) => Math.log(c / closes[i]))
@@ -147,7 +148,7 @@ function extractNetIncomeSeries(financials: any[] | null) {
   return financials
     .map((e: any) => {
       const value = n(e?.netIncome ?? e?.netIncomeCommonStockholders ?? e?.netIncomeContinuousOperations);
-      const year  = e?.date instanceof Date ? e.date.getFullYear() : null;
+      const year = e?.date instanceof Date ? e.date.getFullYear() : null;
       if (value == null || !year) return null;
       return { date: year, value };
     })
@@ -177,13 +178,74 @@ function latestFin(financials: any[] | null, field: string): number | null {
   return n(sorted[0]?.[field]);
 }
 
-async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
-  const dks = qs?.defaultKeyStatistics ?? {};
-  const fd  = qs?.financialData        ?? {};
-  const sd  = qs?.summaryDetail        ?? {};
+// ─── Comparação técnica Yahoo × TradingView ────────────────────
 
-  const fin = ts?.financials   ?? null; // Array v3 (financials)
-  const bs  = ts?.balanceSheet ?? null; // Array v3 (balance-sheet)
+/**
+ * Compara os indicadores técnicos calculados a partir dos candles do Yahoo
+ * com os valores pré-calculados pelo TradingView.
+ *
+ * Comparáveis diretos (mesma fórmula — SMA simples):
+ *   mm20  ↔ sma20  |  mm50  ↔ sma50  |  mm200 ↔ sma200  |  price ↔ close
+ *
+ * Comparável indireto (metodologias distintas):
+ *   adxProxy (proxy ATR-based do Yahoo) ↔ adx (ADX de Wilder do TV)
+ *   — diferenças esperadas; apenas registrado para referência.
+ *
+ * TV-only (não calculados no buildTechnical — armazenados como referência):
+ *   rsi14, rsi7, macd, macdSignal, macdHist, cci20, stochK, stochD, ema20, ema50, ema200, atr
+ */
+function buildTVTechComparison(tech: ReturnType<typeof buildTechnical>, tvTech: TVTechnicals) {
+  const pctDiff = (a: number | null, b: number | null): number | null => {
+    if (a == null || b == null) return null;
+    const denom = Math.max(Math.abs(a), Math.abs(b));
+    return denom === 0 ? 0 : +((Math.abs(a - b) / denom) * 100).toFixed(2);
+  };
+
+  // Tolerância 2% para SMAs (diferenças de ajuste de preço entre fontes são esperadas)
+  const TOLERANCE = 2;
+
+  const compare = (yahooVal: number | null, tvVal: number | null, label: string) => {
+    const diff = pctDiff(yahooVal, tvVal);
+    const diverges = diff != null && diff > TOLERANCE;
+    if (diverges) {
+      console.log(`  [tradingview] ⚠️  tech.${label}: Yahoo=${yahooVal?.toFixed(2)} TV=${tvVal?.toFixed(2)} — diff=${diff?.toFixed(2)}%`);
+    }
+    return { yahoo: yahooVal ?? null, tv: tvVal ?? null, pctDiff: diff, diverges: diverges ?? false };
+  };
+
+  return {
+    // ── Comparáveis diretos ──────────────────────────────────
+    price: compare(tech.price, tvTech.close, "price"),
+    sma20: compare(tech.mm20, tvTech.sma20, "sma20"),
+    sma50: compare(tech.mm50, tvTech.sma50, "sma50"),
+    sma200: compare(tech.mm200, tvTech.sma200, "sma200"),
+    // ── Comparável indireto ──────────────────────────────────
+    // adxProxy usa ATR normalizado; TV usa ADX de Wilder — valores distintos por design
+    adx: compare(tech.adxProxy, tvTech.adx, "adx"),
+    // ── TV-only (referência adicional) ───────────────────────
+    rsi14: tvTech.rsi14,
+    rsi7: tvTech.rsi7,
+    macd: tvTech.macd,
+    macdSignal: tvTech.macdSignal,
+    macdHist: tvTech.macdHist,
+    ema20: tvTech.ema20,
+    ema50: tvTech.ema50,
+    ema200: tvTech.ema200,
+    sma100: tvTech.sma100,
+    atr: tvTech.atr,
+    cci20: tvTech.cci20,
+    stochK: tvTech.stochK,
+    stochD: tvTech.stochD,
+  };
+}
+
+async function buildFundamental(ticker: string, quote: any, qs: any, ts: any, tvIndicators?: TVFundamentals) {
+  const dks = qs?.defaultKeyStatistics ?? {};
+  const fd = qs?.financialData ?? {};
+  const sd = qs?.summaryDetail ?? {};
+
+  const fin = ts?.financials ?? null; // Array v3 (financials)
+  const bs = ts?.balanceSheet ?? null; // Array v3 (balance-sheet)
 
   // earningsTrend.trend[] campos:
   //   t.period          → "0q", "+1q", "0y", "+1y"
@@ -194,17 +256,17 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
   for (const t of qs?.earningsTrend?.trend ?? []) {
     if (!t?.period) continue;
     earningsTrend[t.period] = {
-      period:           t.period,
-      endDate:          t.endDate ?? null,
+      period: t.period,
+      endDate: t.endDate ?? null,
       // crescimento realizado do período (fonte: trend.growth)
-      growthActual:     n(t.growth),
+      growthActual: n(t.growth),
       // estimativas de EPS
-      epsEstimateAvg:   n(t?.earningsEstimate?.avg),
-      epsEstimateGrowth:n(t?.earningsEstimate?.growth),
-      epsYearAgo:       n(t?.earningsEstimate?.yearAgoEps),
+      epsEstimateAvg: n(t?.earningsEstimate?.avg),
+      epsEstimateGrowth: n(t?.earningsEstimate?.growth),
+      epsYearAgo: n(t?.earningsEstimate?.yearAgoEps),
       // estimativas de receita
-      revenueEstimateAvg:   n(t?.revenueEstimate?.avg),
-      revenueEstimateGrowth:n(t?.revenueEstimate?.growth),
+      revenueEstimateAvg: n(t?.revenueEstimate?.avg),
+      revenueEstimateGrowth: n(t?.revenueEstimate?.growth),
     };
   }
 
@@ -243,16 +305,27 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
     earningsGrowthYoY = earningsTrend["0y"].growthActual;
     earningsGrowthSource = "earningsTrend[0y].growthActual";
   }
+  // 3ª opção: cálculo manual a partir da série netIncomeAnual (fundamentalsTimeSeries)
+  // Usado apenas quando as fontes anteriores retornam null.
+  // Guard: ano-base negativo ou zero → skip (crescimento seria matematicamente absurdo)
+  if (earningsGrowthYoY == null && netIncomeAnual.length >= 2) {
+    const prev = (netIncomeAnual as any[]).at(-2)?.value as number | null;
+    const curr = (netIncomeAnual as any[]).at(-1)?.value as number | null;
+    if (prev != null && curr != null && prev > 0) {
+      earningsGrowthYoY = +((curr - prev) / prev).toFixed(6);
+      earningsGrowthSource = "netIncomeAnual.calc";
+    }
+  }
 
   // EBITDA: preferir série histórica, cair para quoteSummary
   const ebitdaFromTS = latestFin(fin, "EBITDA") ?? latestFin(fin, "normalizedEBITDA");
-  const ebitda       = ebitdaFromTS ?? n(fd?.ebitda);
+  const ebitda = ebitdaFromTS ?? n(fd?.ebitda);
 
   // Dívida total e caixa da série v3, fallback para quoteSummary
-  const totalDebt  = latestBS(bs, "totalDebt") ?? n(fd?.totalDebt);
-  const totalCash  = latestBS(bs, "cashAndCashEquivalents")
-                  ?? latestBS(bs, "cashCashEquivalentsAndShortTermInvestments")
-                  ?? n(fd?.totalCash);
+  const totalDebt = latestBS(bs, "totalDebt") ?? n(fd?.totalDebt);
+  const totalCash = latestBS(bs, "cashAndCashEquivalents")
+    ?? latestBS(bs, "cashCashEquivalentsAndShortTermInvestments")
+    ?? n(fd?.totalCash);
 
   const dyNorm = normalizeDY(n(quote?.dividendYield), n(sd?.dividendYield));
   console.log(`  [yahoo] PE=${n(quote?.trailingPE ?? sd?.trailingPE)}, ROE=${n(fd?.returnOnEquity)}, DY(ratio)=${dyNorm?.toFixed(4)}, beta=${n(quote?.beta ?? sd?.beta)}`);
@@ -268,23 +341,23 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
   // latestFin/latestBS pegam o registro mais recente (ordenado por date desc).
   let roicYahoo: number | null = null;
   {
-    const opIncome   = latestFin(fin, "operatingIncome");
+    const opIncome = latestFin(fin, "operatingIncome");
     const taxExpense = latestFin(fin, "incomeTaxExpense");
-    const pretaxInc  = latestFin(fin, "pretaxIncome");
-    const debt       = latestBS(bs, "totalDebt");
-    const equity     = latestBS(bs, "totalStockholderEquity")
-                    ?? latestBS(bs, "stockholdersEquity");
-    const cash       = latestBS(bs, "cashAndCashEquivalents")
-                    ?? latestBS(bs, "cashCashEquivalentsAndShortTermInvestments");
+    const pretaxInc = latestFin(fin, "pretaxIncome");
+    const debt = latestBS(bs, "totalDebt");
+    const equity = latestBS(bs, "totalStockholderEquity")
+      ?? latestBS(bs, "stockholdersEquity");
+    const cash = latestBS(bs, "cashAndCashEquivalents")
+      ?? latestBS(bs, "cashCashEquivalentsAndShortTermInvestments");
 
     if (opIncome != null && taxExpense != null && pretaxInc != null
-        && pretaxInc !== 0 && debt != null && equity != null && cash != null) {
-      const taxRate       = taxExpense / pretaxInc;
-      const nopat         = opIncome * (1 - taxRate);
+      && pretaxInc !== 0 && debt != null && equity != null && cash != null) {
+      const taxRate = taxExpense / pretaxInc;
+      const nopat = opIncome * (1 - taxRate);
       const investedCapital = debt + equity - cash;
       if (investedCapital !== 0) {
         roicYahoo = +(nopat / investedCapital).toFixed(6);
-        console.log(`  [yahoo] ROIC calc: opIncome=${opIncome}, taxRate=${(taxRate*100).toFixed(1)}%, NOPAT=${nopat.toFixed(0)}, IC=${investedCapital.toFixed(0)}, ROIC=${(roicYahoo*100).toFixed(2)}%`);
+        console.log(`  [yahoo] ROIC calc: opIncome=${opIncome}, taxRate=${(taxRate * 100).toFixed(1)}%, NOPAT=${nopat.toFixed(0)}, IC=${investedCapital.toFixed(0)}, ROIC=${(roicYahoo * 100).toFixed(2)}%`);
       }
     } else {
       console.log(`  [yahoo] ROIC: dados insuficientes (opIncome=${opIncome}, taxExp=${taxExpense}, pretax=${pretaxInc}, debt=${debt}, equity=${equity}, cash=${cash})`);
@@ -296,36 +369,75 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
   // enterpriseValue (dks) / operatingIncome (latestFin) = proxy de EV/EBIT
   // operatingIncome ≈ EBIT (diferença: itens não-recorrentes — aceitável para B3)
   const enterpriseValue = n(dks?.enterpriseValue);
-  const opIncomeForEV   = latestFin(fin, "operatingIncome") ?? n(fd?.operatingIncome);
+  const opIncomeForEV = latestFin(fin, "operatingIncome") ?? n(fd?.operatingIncome);
   const evEbitYahoo = (enterpriseValue != null && opIncomeForEV != null && opIncomeForEV !== 0)
     ? +(enterpriseValue / opIncomeForEV).toFixed(4)
     : null;
 
   const yahooValues = {
-    price:         n(quote?.regularMarketPrice),
-    pl:            n(quote?.trailingPE  ?? sd?.trailingPE  ?? dks?.forwardPE),
-    pvp:           n(dks?.priceToBook   ?? quote?.priceToBook),
-    dy:            dyNorm,
-    payout:        n(quote?.payoutRatio ?? sd?.payoutRatio),
-    margemLiquida: n(fd?.profitMargins  ?? quote?.profitMargins),
-    roe:           n(fd?.returnOnEquity),
-    roa:           n(fd?.returnOnAssets),
-    roic:          roicYahoo,
-    liqCorrente:   n(fd?.currentRatio),
-    pegRatio:      n(dks?.pegRatio      ?? dks?.trailingPegRatio),
-    dividaEbitda:  (totalDebt != null && ebitda != null && ebitda !== 0)
-                   ? totalDebt / ebitda : null,
-    evEbit:        evEbitYahoo,
+    price: n(quote?.regularMarketPrice),
+    pl: n(quote?.trailingPE ?? sd?.trailingPE ?? dks?.forwardPE),
+    pvp: n(dks?.priceToBook ?? quote?.priceToBook),
+    dy: dyNorm,
+    payout: n(quote?.payoutRatio ?? sd?.payoutRatio),
+    margemLiquida: n(fd?.profitMargins ?? quote?.profitMargins),
+    roe: n(fd?.returnOnEquity),
+    roa: n(fd?.returnOnAssets),
+    roic: roicYahoo,
+    liqCorrente: n(fd?.currentRatio),
+    pegRatio: n(dks?.pegRatio ?? dks?.trailingPegRatio),
+    dividaEbitda: (totalDebt != null && ebitda != null && ebitda !== 0)
+      ? totalDebt / ebitda : null,
+    evEbit: evEbitYahoo,
   };
 
-  // ── Scraping e reconciliação com fontes externas ─────────────────────────
-  // Apenas para tickers brasileiros (.SA) — fontes só cobrem B3
+  // ── Reconciliação com fontes externas ────────────────────────────────────
+  // Converte tvIndicators para ScrapedFundamentals (fonte adicional com mesmo peso
+  // que os scrapers na função reconcile() do scraperService).
+  const tvSource: ScrapedFundamentals | null = tvIndicators ? {
+    source:        "tradingview",
+    pl:            tvIndicators.pl,
+    dy:            tvIndicators.dy,
+    roe:           tvIndicators.roe,
+    roa:           tvIndicators.roa,
+    roic:          tvIndicators.roic,
+    margemLiquida: tvIndicators.margemLiquida,
+    liqCorrente:   tvIndicators.liqCorrente,
+    dividaEbitda:  tvIndicators.dividaEbitda,
+    evEbit:        tvIndicators.evEbit,
+  } : null;
+
   let rec: Record<string, { final: number | null; changed: boolean; sources: { source: string; value: number | null }[] }> = {};
+
   if (ticker.toUpperCase().endsWith(".SA")) {
+    // .SA — scrapers + TV votam juntos com a mesma lógica de reconciliação (±5%)
     try {
-      rec = await reconcileFundamentals(ticker, yahooValues);
+      rec = await reconcileFundamentals(ticker, yahooValues, tvSource ? [tvSource] : []);
     } catch (e) {
       console.warn(`  [scraper] ⚠️  reconcileFundamentals falhou: ${(e as Error).message}`);
+    }
+  } else if (tvSource) {
+    // Não-.SA — TV é a única fonte externa; comportamento conservador:
+    //   Yahoo=null → usa TV | Yahoo próximo → confirma | Yahoo diverge → mantém Yahoo
+    const tvClose = (a: number | null, b: number | null) => {
+      if (a == null || b == null) return false;
+      const d = Math.max(Math.abs(a), Math.abs(b));
+      return d === 0 ? true : Math.abs(a - b) / d <= 0.05;
+    };
+    const tvFields = ["pl","dy","roe","roa","roic","margemLiquida","liqCorrente","dividaEbitda","evEbit"] as const;
+    for (const key of tvFields) {
+      const tvVal  = tvSource[key] ?? null;
+      if (tvVal == null) continue;
+      const yahooVal = yahooValues[key as keyof typeof yahooValues];
+      const sources  = [{ source: "tradingview", value: tvVal }];
+      if (yahooVal == null) {
+        console.log(`  [tradingview] ${key}: Yahoo=null → TV=${tvVal}`);
+        rec[key] = { final: tvVal, changed: true, sources };
+      } else {
+        if (!tvClose(yahooVal, tvVal))
+          console.log(`  [tradingview] ⚠️  ${key}: Yahoo=${yahooVal.toFixed(4)} TV=${tvVal.toFixed(4)} — divergência >5%`);
+        rec[key] = { final: yahooVal, changed: false, sources };
+      }
     }
   }
 
@@ -341,7 +453,7 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
    * Estrutura:
    *   { yahooFinance: number|null, investidor10: number|null,
    *     fundamentus: number|null, statusinvest: number|null,
-   *     final: number|null, changed: boolean }
+   *     tradingview: number|null, final: number|null, changed: boolean }
    */
   const S = (key: keyof typeof yahooValues) => {
     const entry = rec[key];
@@ -350,69 +462,70 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
     return {
       yahooFinance: yahooValues[key] ?? null,
       investidor10: bySource["investidor10"] ?? null,
-      fundamentus:  bySource["fundamentus"]  ?? null,
+      fundamentus: bySource["fundamentus"] ?? null,
       statusinvest: bySource["statusinvest"] ?? null,
-      final:        R(key),
-      changed:      entry?.changed ?? false,
+      tradingview: bySource["tradingview"] ?? null,
+      final: R(key),
+      changed: entry?.changed ?? false,
     };
   };
 
   return {
     valuation: {
-      trailingPE:          R("pl"),
-      trailingPE_sources:  S("pl"),
-      forwardPE:           n(dks?.forwardPE ?? quote?.forwardPE),
-      priceToBook:         R("pvp"),
+      trailingPE: R("pl"),
+      trailingPE_sources: S("pl"),
+      forwardPE: n(dks?.forwardPE ?? quote?.forwardPE),
+      priceToBook: R("pvp"),
       priceToBook_sources: S("pvp"),
-      trailingEps:         n(dks?.trailingEps),
-      bookValue:           n(dks?.bookValue),
-      pegRatio:            R("pegRatio"),
-      pegRatio_sources:    S("pegRatio"),
-      evEbit:              R("evEbit"),
-      evEbit_sources:      S("evEbit"),
-      dividendRate:        n(sd?.dividendRate ?? quote?.dividendRate),
+      trailingEps: n(dks?.trailingEps),
+      bookValue: n(dks?.bookValue),
+      pegRatio: R("pegRatio"),
+      pegRatio_sources: S("pegRatio"),
+      evEbit: R("evEbit"),
+      evEbit_sources: S("evEbit"),
+      dividendRate: n(sd?.dividendRate ?? quote?.dividendRate),
     },
     rentabilidade: {
-      returnOnEquity:           R("roe"),
-      returnOnEquity_sources:   S("roe"),
-      returnOnAssets:           R("roa"),
-      returnOnAssets_sources:   S("roa"),
-      returnOnInvestedCapital:  R("roic"),
-      roic_sources:             S("roic"),
-      profitMargins:            R("margemLiquida"),
-      profitMargins_sources:    S("margemLiquida"),
-      grossMargins:             n(fd?.grossMargins),
-      operatingMargins:         n(fd?.operatingMargins),
+      returnOnEquity: R("roe"),
+      returnOnEquity_sources: S("roe"),
+      returnOnAssets: R("roa"),
+      returnOnAssets_sources: S("roa"),
+      returnOnInvestedCapital: R("roic"),
+      roic_sources: S("roic"),
+      profitMargins: R("margemLiquida"),
+      profitMargins_sources: S("margemLiquida"),
+      grossMargins: n(fd?.grossMargins),
+      operatingMargins: n(fd?.operatingMargins),
     },
     divida: {
       totalDebt,
       totalCash,
       ebitda,
-      debtToEquity:             n(fd?.debtToEquity),
-      currentRatio:             R("liqCorrente"),
-      currentRatio_sources:     S("liqCorrente"),
-      dividaEbitda:             R("dividaEbitda"),
-      dividaEbitda_sources:     S("dividaEbitda"),
-      quickRatio:               n(fd?.quickRatio),
-      freeCashflow:             n(fd?.freeCashflow),
-      operatingCashflow:        n(fd?.operatingCashflow),
+      debtToEquity: n(fd?.debtToEquity),
+      currentRatio: R("liqCorrente"),
+      currentRatio_sources: S("liqCorrente"),
+      dividaEbitda: R("dividaEbitda"),
+      dividaEbitda_sources: S("dividaEbitda"),
+      quickRatio: n(fd?.quickRatio),
+      freeCashflow: n(fd?.freeCashflow),
+      operatingCashflow: n(fd?.operatingCashflow),
     },
     crescimento: {
       netIncomeAnual,
       earningsGrowthYoY,
-      revenueGrowthYoY:  n(fd?.revenueGrowth),
+      revenueGrowthYoY: n(fd?.revenueGrowth),
       earningsTrend,
     },
     dividendos: {
-      dividendYield:         R("dy"),
+      dividendYield: R("dy"),
       dividendYield_sources: S("dy"),
-      dividendRate:          n(sd?.dividendRate ?? quote?.dividendRate),
+      dividendRate: n(sd?.dividendRate ?? quote?.dividendRate),
       // trailingAnnualDividendRate: dividendo real pago nos últimos 12 meses (R$/ação)
       // Usado no cálculo de Bazin: preçoJusto = trailingAnnualDividendRate / 0.06
       trailingAnnualDividendRate: n(quote?.trailingAnnualDividendRate),
-      payoutRatio:           R("payout"),
-      payoutRatio_sources:   S("payout"),
-      exDividendDate:        sd?.exDividendDate ?? null,
+      payoutRatio: R("payout"),
+      payoutRatio_sources: S("payout"),
+      exDividendDate: sd?.exDividendDate ?? null,
     },
     risco: { beta: n(quote?.beta ?? sd?.beta) },
     // ── Rastreabilidade de preço ─────────────────────────────
@@ -420,8 +533,8 @@ async function buildFundamental(ticker: string, quote: any, qs: any, ts: any) {
   };
 }
 
-function buildRecommendations(quote: any, qs: any) {
-  const fd  = qs?.financialData       ?? {};
+function buildRecommendations(quote: any, qs: any, tvRec?: TVRecommendations) {
+  const fd = qs?.financialData ?? {};
   const raw = qs?.recommendationTrend?.trend ?? [];
   const trends = raw
     .filter((p: any) => {
@@ -431,10 +544,23 @@ function buildRecommendations(quote: any, qs: any) {
     })
     .sort((a: any, b: any) => parseInt(a.period) - parseInt(b.period));
 
+  const yahooKey = quote?.recommendationKey ?? fd?.recommendationKey ?? null;
+
+  // TV como fallback quando Yahoo não retorna recommendationKey
+  const recommendationKey = yahooKey ?? tvRec?.recommendationKey ?? null;
+
+  if (!yahooKey && tvRec?.recommendationKey) {
+    console.log(`  [tradingview] recommendationKey: Yahoo=null → TV=${tvRec.recommendationKey}`);
+  } else if (yahooKey && tvRec?.recommendationKey && yahooKey !== tvRec.recommendationKey) {
+    console.log(`  [tradingview] recommendationKey: Yahoo=${yahooKey} TV=${tvRec.recommendationKey} — divergência`);
+  }
+
   return {
-    recommendationKey:       quote?.recommendationKey ?? fd?.recommendationKey ?? null,
+    recommendationKey,
     numberOfAnalystOpinions: n(fd?.numberOfAnalystOpinions),
     trends,
+    // Scores do TradingView (componentes independentes — osciladores + médias móveis)
+    tv: tvRec ?? null,
   };
 }
 
@@ -459,38 +585,46 @@ export async function fetchAllData(rawTicker: string): Promise<Record<string, un
   const ticker = normalizeTicker(rawTicker);
   console.log(`\n🔍 Buscando dados: ${ticker}${ticker !== rawTicker.trim().toUpperCase() ? ` (normalizado de "${rawTicker}")` : ""}`);
 
-  const [candlesR, quoteR, qsR, tsR] = await Promise.allSettled([
+  const [candlesR, quoteR, qsR, tsR, tvR] = await Promise.allSettled([
     fetchCandles(ticker),
     fetchQuote(ticker),
     fetchQuoteSummary(ticker),
     fetchTimeSeries(ticker),
+    fetchTVAll(ticker),
   ]);
 
   const candles = candlesR.status === "fulfilled" ? candlesR.value : null;
-  const quote   = quoteR.status   === "fulfilled" ? quoteR.value   : null;
-  const qs      = qsR.status      === "fulfilled" ? qsR.value      : null;
-  const ts      = tsR.status      === "fulfilled" ? tsR.value      : null;
+  const quote = quoteR.status === "fulfilled" ? quoteR.value : null;
+  const qs = qsR.status === "fulfilled" ? qsR.value : null;
+  const ts = tsR.status === "fulfilled" ? tsR.value : null;
+  const tvAll = tvR.status === "fulfilled" ? tvR.value : null;
 
   if (candlesR.status === "rejected") console.error(`  ❌ candles: ${(candlesR as any).reason?.message}`);
-  if (quoteR.status   === "rejected") console.error(`  ❌ quote: ${(quoteR as any).reason?.message}`);
-  if (qsR.status      === "rejected") console.error(`  ❌ quoteSummary: ${(qsR as any).reason?.message}`);
-  if (tsR.status      === "rejected") console.warn (`  ⚠️  timeSeries: ${(tsR as any).reason?.message}`);
+  if (quoteR.status === "rejected") console.error(`  ❌ quote: ${(quoteR as any).reason?.message}`);
+  if (qsR.status === "rejected") console.error(`  ❌ quoteSummary: ${(qsR as any).reason?.message}`);
+  if (tsR.status === "rejected") console.warn(`  ⚠️  timeSeries: ${(tsR as any).reason?.message}`);
+  if (tvR.status === "rejected") console.warn(`  ⚠️  tradingView: ${(tvR as any).reason?.message}`);
 
   const technical = candles ? buildTechnical(candles) : null;
   console.log(`  ${technical ? `✅ candles: ${candles!.length} pregões, preço=${technical.price}` : "❌ sem dados técnicos"}`);
 
+  // Comparação técnica Yahoo × TradingView: injeta tvComparison no objeto technical
+  const tvTechComparison = (technical && tvAll?.technicals)
+    ? buildTVTechComparison(technical, tvAll.technicals)
+    : null;
+
   return {
     meta: {
-      ticker:    ticker.toUpperCase(),
-      currency:  (quote as any)?.currency ?? (ticker.endsWith(".SA") ? "BRL" : "USD"),
+      ticker: ticker.toUpperCase(),
+      currency: (quote as any)?.currency ?? (ticker.endsWith(".SA") ? "BRL" : "USD"),
       shortName: (quote as any)?.shortName ?? (quote as any)?.longName ?? null,
-      sector:    (qs as any)?.assetProfile?.sector   ?? null,
-      industry:  (qs as any)?.assetProfile?.industry ?? null,
+      sector: (qs as any)?.assetProfile?.sector ?? null,
+      industry: (qs as any)?.assetProfile?.industry ?? null,
       fetchedAt: new Date().toISOString(),
     },
-    technical,
-    fundamental:     await buildFundamental(ticker, quote, qs, ts),
-    recommendations: buildRecommendations(quote, qs),
+    technical: technical ? { ...technical, tvComparison: tvTechComparison } : null,
+    fundamental: await buildFundamental(ticker, quote, qs, ts, tvAll?.fundamentals),
+    recommendations: buildRecommendations(quote, qs, tvAll?.recommendations),
   };
 }
 
