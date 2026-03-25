@@ -4,6 +4,7 @@ import { Router as ConfigRouter } from "express";
 import { Router as StockRouter } from "express";
 import { getAllProfiles, getProfile, updateIndicators, updateThresholds, resetAll, resetProfile } from "../controllers/configController";
 import { analyzeStockHandler, invalidateCacheHandler, listCacheHandler } from "../controllers/stockController";
+import { backtestHandler } from "../controllers/backtestController";
 
 const configRouter = ConfigRouter();
 configRouter.get("/profiles",                   getAllProfiles);
@@ -18,8 +19,12 @@ stockRouter.get("/cache",            listCacheHandler);
 stockRouter.get("/analyze/:ticker",  analyzeStockHandler);
 stockRouter.delete("/cache/:ticker", invalidateCacheHandler);
 
+const backtestRouter = Router();
+backtestRouter.post("/", backtestHandler);
+
 const router = Router();
-router.use("/config", configRouter);
-router.use("/stock",  stockRouter);
+router.use("/config",    configRouter);
+router.use("/stock",     stockRouter);
+router.use("/backtest",  backtestRouter);
 
 export default router;

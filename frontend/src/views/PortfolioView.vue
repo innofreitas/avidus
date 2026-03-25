@@ -9,6 +9,7 @@ import AnalysisDetail from "@/components/analysis/AnalysisDetail.vue";
 import AnalysisBarsi        from "@/components/analysis/AnalysisBarsi.vue";
 import AnalysisBuffett      from "@/components/analysis/AnalysisBuffett.vue";
 import AnalysisMagicFormula from "@/components/analysis/AnalysisMagicFormula.vue";
+import AnalysisBacktest    from "@/components/analysis/AnalysisBacktest.vue";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ const showModal    = ref(false);
 const showBarsi        = ref(false);
 const showBuffett      = ref(false);
 const showMagicFormula = ref(false);
+const showBacktest     = ref(false);
 
 const activeTab    = ref<"acoes" | "etf" | "fundos" | "renda_fixa" | "tesouro">("acoes");
 
@@ -559,6 +561,14 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                  disabled:opacity-40 disabled:cursor-not-allowed">
           ✨ Fórmula Mágica
         </button>
+        <!-- Botão Backtest -->
+        <button @click="showBacktest = true"
+          :disabled="!acoes.some(r => r.recomendacao?.result != null)"
+          class="btn-secondary text-sm flex items-center gap-2 border border-green-400 dark:border-green-600
+                 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/40
+                 disabled:opacity-40 disabled:cursor-not-allowed">
+          📊 Backtest
+        </button>
       </div>
 
       <div class="overflow-x-auto">
@@ -933,6 +943,13 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       v-if="showMagicFormula"
       :acoes="acoes"
       @close="showMagicFormula = false"
+    />
+
+    <!-- ── Modal Backtest ────────────────────────────────────── -->
+    <AnalysisBacktest
+      v-if="showBacktest"
+      :acoes="acoes"
+      @close="showBacktest = false"
     />
 
 </template>

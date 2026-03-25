@@ -308,6 +308,21 @@ function buildArcs(entries: ArcEntry[]) {
 
 const arcs = computed(() => buildArcs(arcEntries.value));
 
+// ─── Tooltip da rosca ────────────────────────────────────────────────────────
+type ArcItem = { d: string; cor: string; setor: string; pct: number; emoji: string };
+const hoverArc  = ref<ArcItem | null>(null);
+const donutPos  = ref({ x: 0, y: 0 });
+
+function onDonutMove(e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  donutPos.value = { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+const donutTooltipStyle = computed(() => ({
+  left: donutPos.value.x > 110 ? `${donutPos.value.x - 148}px` : `${donutPos.value.x + 14}px`,
+  top:  `${Math.max(4, donutPos.value.y - 24)}px`,
+}));
+
 // ─── Tabs do modal ────────────────────────────────────────────
 const activeTab = ref<"grafico" | "balanceamento" | "simulacao" | "insights">("grafico");
 </script>
@@ -379,12 +394,14 @@ const activeTab = ref<"grafico" | "balanceamento" | "simulacao" | "insights">("g
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
 
                 <!-- Rosca SVG -->
-                <div class="flex justify-center">
+                <div class="relative flex justify-center"
+                  @mousemove="onDonutMove" @mouseleave="hoverArc = null">
                   <svg viewBox="0 0 200 200" class="w-52 h-52">
                     <path v-for="(arc, i) in arcs" :key="i"
                       :d="arc.d" :fill="arc.cor"
-                      class="transition-all hover:opacity-80 cursor-default"
-                      :title="`${arc.setor}: ${arc.pct.toFixed(1)}%`" />
+                      class="transition-all hover:opacity-80 cursor-pointer"
+                      @mouseenter="hoverArc = arc"
+                      @mouseleave="hoverArc = null" />
                     <!-- Centro -->
                     <text x="100" y="96" text-anchor="middle"
                       class="text-xs" font-size="11" fill="currentColor"
@@ -395,6 +412,24 @@ const activeTab = ref<"grafico" | "balanceamento" | "simulacao" | "insights">("g
                       {{ coberturaBEST.pct.toFixed(0) }}%
                     </text>
                   </svg>
+                  <!-- Tooltip -->
+                  <div v-if="hoverArc"
+                    class="absolute z-20 pointer-events-none
+                           bg-white dark:bg-gray-800
+                           border border-gray-200 dark:border-gray-700
+                           rounded-xl shadow-xl px-3 py-2 text-xs min-w-[130px]"
+                    :style="donutTooltipStyle">
+                    <p class="flex items-center gap-1.5 font-semibold text-gray-800 dark:text-gray-100 mb-1">
+                      <span class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        :style="{ backgroundColor: hoverArc.cor }" />
+                      {{ hoverArc.emoji }} {{ hoverArc.setor }}
+                    </p>
+                    <p class="text-lg font-black tabular-nums"
+                      :style="{ color: hoverArc.cor }">
+                      {{ hoverArc.pct.toFixed(1) }}%
+                    </p>
+                    <p class="text-gray-400 text-[10px] mt-0.5">do portfólio BEST</p>
+                  </div>
                 </div>
 
                 <!-- Legenda -->
