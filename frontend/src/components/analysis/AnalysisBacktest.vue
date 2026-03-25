@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import type { AnalysisResult } from "@/types";
 import api from "@/utils/api";
+import { formatDate } from "@/utils/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
@@ -264,10 +265,6 @@ function fmtNum(v: number | null, decimals = 2): string {
   return v.toFixed(decimals);
 }
 
-function fmtDate(d: string): string {
-  if (!d) return "—";
-  return d.slice(0, 10);
-}
 
 function ifrLabel(v: number | null): string {
   if (v == null) return "—";
@@ -520,7 +517,7 @@ onMounted(loadBacktest);
               <p class="text-xs text-gray-400 mt-0.5">
                 CAGR · Sharpe · Volatilidade · Drawdown · Alpha vs iBovespa · IFR
                 <span v-if="result" class="ml-2 font-semibold text-blue-400">
-                  {{ fmtDate(result.period.from) }} → {{ fmtDate(result.period.to) }}
+                  {{ formatDate(result.period.from) }} → {{ formatDate(result.period.to) }}
                   ({{ result.period.days }} pregões)
                 </span>
               </p>
@@ -920,7 +917,7 @@ onMounted(loadBacktest);
 
               <div class="text-xs text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 space-y-1 mt-2">
                 <p><strong>Referências utilizadas:</strong> CDI 11,75% a.a. como taxa livre de risco · CAPM para cálculo de Alpha · RSI 14 períodos (IFR)</p>
-                <p><strong>Período:</strong> {{ fmtDate(result.period.from) }} → {{ fmtDate(result.period.to) }} ({{ result.period.days }} pregões disponíveis em cache)</p>
+                <p><strong>Período:</strong> {{ formatDate(result.period.from) }} → {{ formatDate(result.period.to) }} ({{ result.period.days }} pregões disponíveis em cache)</p>
               </div>
 
             </div>

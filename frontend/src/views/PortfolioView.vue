@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import api from "@/utils/api";
 import type { AnalysisResult, ProfileName } from "@/types";
 import { PROFILE_LABELS, PROFILE_ICONS, ALL_PROFILES } from "@/types";
-import { decisionColor, decisionBadgeClass, formatNumber } from "@/utils/formatters";
+import { decisionColor, decisionBadgeClass, formatNumber, formatDate } from "@/utils/formatters";
 import AnalysisDetail from "@/components/analysis/AnalysisDetail.vue";
 import AnalysisBarsi        from "@/components/analysis/AnalysisBarsi.vue";
 import AnalysisBuffett      from "@/components/analysis/AnalysisBuffett.vue";
@@ -116,12 +116,6 @@ function fmtDate(v: any): string | null {
   return String(v);
 }
 
-function fmtDateDisplay(v: string | null): string {
-  if (!v) return "—";
-  const [y, m, d] = v.split("-");
-  if (!d) return v;
-  return `${d}/${m}/${y}`;
-}
 
 function fmtCurrency(v: number | null): string {
   if (v == null) return "—";
@@ -808,8 +802,8 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                 {{ row.produto }}
               </td>
               <td class="py-2 pr-3 text-right tabular-nums">{{ fmtQtd(row.quantidade) }}</td>
-              <td class="py-2 pr-3 text-gray-500 tabular-nums">{{ fmtDateDisplay(row.dataEmissao) }}</td>
-              <td class="py-2 pr-3 text-gray-500 tabular-nums">{{ fmtDateDisplay(row.vencimento) }}</td>
+              <td class="py-2 pr-3 text-gray-500 tabular-nums">{{ formatDate(row.dataEmissao) }}</td>
+              <td class="py-2 pr-3 text-gray-500 tabular-nums">{{ formatDate(row.vencimento) }}</td>
               <td class="py-2 pr-3 text-right tabular-nums">{{ fmtCurrency(row.precoAtualizado) }}</td>
               <td class="py-2 text-right tabular-nums font-semibold">{{ fmtCurrency(row.valorAtualizado) }}</td>
             </tr>
@@ -854,7 +848,7 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                 {{ row.produto }}
               </td>
               <td class="py-2 pr-3 text-gray-500">{{ row.indexador ?? "—" }}</td>
-              <td class="py-2 pr-3 text-gray-500 tabular-nums">{{ fmtDateDisplay(row.vencimento) }}</td>
+              <td class="py-2 pr-3 text-gray-500 tabular-nums">{{ formatDate(row.vencimento) }}</td>
               <td class="py-2 pr-3 text-right tabular-nums">{{ fmtQtd(row.quantidade) }}</td>
               <td class="py-2 pr-3 text-right tabular-nums">{{ fmtCurrency(row.valorAplicado) }}</td>
               <td class="py-2 pr-3 text-right tabular-nums">{{ fmtCurrency(row.valorBruto) }}</td>

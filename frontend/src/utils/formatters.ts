@@ -39,3 +39,10 @@ export function fmtDate(iso: string) {
     });
   } catch { return iso; }
 }
+
+export function formatDate(iso: string): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  if (!d) return iso;
+  return `${d}/${m}/${y}`;
+}

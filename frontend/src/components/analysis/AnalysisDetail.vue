@@ -6,7 +6,7 @@ import ScoreGauge          from "@/components/analysis/ScoreGauge.vue";
 import RecommendationChart from "@/components/charts/RecommendationChart.vue";
 import TrendChart          from "@/components/charts/TrendChart.vue";
 import ScoreRadarChart     from "@/components/charts/ScoreRadarChart.vue";
-import { formatPercent, formatNumber, decisionColor, decisionBadgeClass } from "@/utils/formatters";
+import { formatPercent, formatNumber, formatDate, decisionColor, decisionBadgeClass } from "@/utils/formatters";
 
 const props = defineProps<{
   result:      AnalysisResult;
@@ -86,7 +86,7 @@ function indicatorRawValue(id: string): string {
             <span class="font-mono text-gray-400">{{ result.meta.currency }}</span>
           </div>
           <p v-if="result.technical?.dataRange" class="text-xs text-gray-400 mt-1">
-            Período: {{ result.technical.dataRange.from }} → {{ result.technical.dataRange.to }}
+            Período: {{ formatDate(result.technical.dataRange.from) }} → {{ formatDate(result.technical.dataRange.to) }}
           </p>
         </div>
         <div class="text-right">
