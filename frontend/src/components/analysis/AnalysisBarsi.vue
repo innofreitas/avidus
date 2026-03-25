@@ -351,7 +351,7 @@ const activeTab = ref<"grafico" | "balanceamento" | "simulacao" | "insights">("g
             <p class="text-sm mt-1">A análise Barsi usa os scores calculados de cada ativo.</p>
           </div>
 
-          <div v-else class="p-5 space-y-5">
+          <div v-else class="p-5 space-y-5 overflow-y-auto max-h-[80vh]">
 
             <!-- ── Tabs ──────────────────────────────────────── -->
             <div class="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">

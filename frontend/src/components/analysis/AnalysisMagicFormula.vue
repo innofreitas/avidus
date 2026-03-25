@@ -133,15 +133,19 @@ function motivoExclusao(row: AcaoRow): string | null {
   for (const exc of SETORES_EXCLUIDOS_API) {
     if (sector.includes(exc) || industry.includes(exc)) {
       const isFinanceiro = exc.includes("financ") || exc.includes("bank") || exc.includes("insur") || exc.includes("capital");
+      if (isFinanceiro && !excluirFinanceiras.value) return null;
+      if (!isFinanceiro && !excluirUtilities.value)  return null;
       return isFinanceiro ? "Financeira" : "Utilidade Pública";
     }
   }
 
   // Fallback por prefixo do ticker (remove dígitos)
+  const UTILITY_PREFIXES = ["ELET","CPFE","CMIG","EGIE","ENGI","TIET","TAEE","ENEV","AURE","CESP","TRPL","CPLE","EQTL","MEGA","SBSP","SAPR","CSMG","AGYS","CAML","CGAS","MGAS"];
   const prefix = row.codigo.replace(/\.SA$/i, "").replace(/\d+$/, "").toUpperCase();
   if (TICKERS_EXCLUIDOS.has(prefix) || TICKERS_EXCLUIDOS.has(row.codigo.replace(/\.SA$/i, "").toUpperCase())) {
-    // Determina categoria pelo prefixo
-    const isUtility = ["ELET","CPFE","CMIG","EGIE","ENGI","TIET","TAEE","ENEV","AURE","CESP","TRPL","CPLE","EQTL","MEGA","SBSP","SAPR","CSMG","AGYS","CAML","CGAS","MGAS"].some(t => prefix.startsWith(t) || t.startsWith(prefix));
+    const isUtility = UTILITY_PREFIXES.some(t => prefix.startsWith(t) || t.startsWith(prefix));
+    if (isUtility && !excluirUtilities.value)   return null;
+    if (!isUtility && !excluirFinanceiras.value) return null;
     return isUtility ? "Utilidade Pública" : "Financeira";
   }
 
@@ -334,6 +338,10 @@ const insights = computed(() => {
   return list;
 });
 
+// ─── Filtros de exclusão ──────────────────────────────────────
+const excluirFinanceiras = ref(true);
+const excluirUtilities   = ref(true);
+
 // ─── Tabs ─────────────────────────────────────────────────────
 const activeTab = ref<"ranking" | "composicao" | "simulacao" | "insights">("ranking");
 </script>
@@ -361,8 +369,8 @@ const activeTab = ref<"ranking" | "composicao" | "simulacao" | "insights">("rank
                 <span v-else class="ml-2 font-semibold text-green-500">
                   {{ ranked.filter(s => s.rankCombinado < 100).length }} rankiados
                   <span class="text-gray-400 font-normal">·</span>
-                  <span class="text-red-400 font-normal">
-                    {{ acoesEnriquecidas.filter(s => s.excluido).length }} excluídos (financeiras/utilities)
+                  <span class="text-red-400 font-normal" v-if="acoesEnriquecidas.filter(s => s.excluido).length > 0">
+                    {{ acoesEnriquecidas.filter(s => s.excluido).length }} excluído(s)
                   </span>
                 </span>
               </p>
@@ -380,7 +388,7 @@ const activeTab = ref<"ranking" | "composicao" | "simulacao" | "insights">("rank
             <p class="text-sm mt-1">A Fórmula Mágica usa ROIC e EV/EBIT do cache de cada ativo.</p>
           </div>
 
-          <div v-else class="p-5 space-y-5">
+          <div v-else class="p-5 space-y-5 overflow-y-auto max-h-[80vh]">
 
             <!-- ── Tabs ───────────────────────────────────── -->
             <div class="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
@@ -399,6 +407,31 @@ const activeTab = ref<"ranking" | "composicao" | "simulacao" | "insights">("rank
                 ]">
                 {{ tab.label }}
               </button>
+            </div>
+
+            <!-- ── Filtros de exclusão ────────────────────────── -->
+            <div class="flex flex-wrap items-center gap-4 px-1 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl text-xs">
+              <span class="font-semibold text-gray-500 uppercase tracking-wide flex-shrink-0">Excluir:</span>
+              <label class="flex items-center gap-2 cursor-pointer select-none group">
+                <input type="checkbox" v-model="excluirFinanceiras"
+                  class="w-4 h-4 rounded accent-red-500 cursor-pointer" />
+                <span :class="excluirFinanceiras ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                  Financeiras
+                  <span class="font-normal text-gray-400">(bancos, seguradoras)</span>
+                </span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer select-none group">
+                <input type="checkbox" v-model="excluirUtilities"
+                  class="w-4 h-4 rounded accent-orange-500 cursor-pointer" />
+                <span :class="excluirUtilities ? 'text-orange-500 font-semibold' : 'text-gray-400'">
+                  Utilities
+                  <span class="font-normal text-gray-400">(energia, saneamento, gás)</span>
+                </span>
+              </label>
+              <span v-if="!excluirFinanceiras || !excluirUtilities"
+                class="ml-auto text-amber-500 font-medium flex items-center gap-1">
+                ⚠️ Incluindo setores não recomendados pela metodologia Greenblatt
+              </span>
             </div>
 
             <!-- ════════════════════════════════════════════════

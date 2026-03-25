@@ -336,7 +336,7 @@ async function analisarTodas() {
     analisandoIdx.value = i;
     row.recomendacao = { loading: true, error: null, result: null };
     try {
-      const ticker = row.codigo.toUpperCase().endsWith(".SA") ? row.codigo : row.codigo + ".SA";
+      const ticker = row.codigo.toUpperCase().replace(/\.SA$/i, "");
       const res = await api.get<{ success: boolean; data: AnalysisResult }>(`/stock/analyze/${ticker}`);
       row.recomendacao = { loading: false, error: null, result: res.data.data ?? null };
     } catch (e: any) {
