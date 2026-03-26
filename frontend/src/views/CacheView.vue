@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import Swal from "sweetalert2";
 import api from "@/utils/api";
 import { fmtDate } from "@/utils/formatters";
+import Pagination from "@/components/table/Pagination.vue";
 
 const MySwal = Swal.mixin({
   customClass: {
@@ -40,6 +41,17 @@ const activeTab  = ref("meta");
 const deleting   = ref(false);
 const copied     = ref(false);
 
+// ─── Paginação ───────────────────────────────────────────────
+
+const PAGE_SIZE_OPTIONS = [15, 50, 100] as const;
+const pageSize    = ref<number>(15);
+const currentPage = ref(1);
+
+// Reseta para página 1 ao mudar filtro ou ordenação
+watch([filter, sortField, sortDir], () => {
+  currentPage.value = 1;
+});
+
 // ─── Fetch ────────────────────────────────────────────────────
 
 async function load() {
@@ -73,6 +85,13 @@ const sorted = computed(() =>
     return sortDir.value === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
   })
 );
+
+// ─── Paginação — computed ────────────────────────────────────
+
+const paginated = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return sorted.value.slice(start, start + pageSize.value);
+});
 
 function sortIcon(f: string) {
   if (sortField.value !== f) return "↕";
@@ -264,7 +283,7 @@ function fmtJson(obj: any): string {
         </thead>
 
         <tbody>
-          <template v-for="row in sorted" :key="row.id">
+          <template v-for="row in paginated" :key="row.id">
 
             <!-- Linha principal -->
             <tr
@@ -395,13 +414,16 @@ function fmtJson(obj: any): string {
         </tbody>
       </table>
 
-      <!-- Rodapé -->
-      <div class="px-4 py-2.5 flex items-center justify-between text-xs text-gray-400
-                  bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
-        <span>{{ sorted.length }} registro{{ sorted.length !== 1 ? "s" : "" }}</span>
-        <span v-if="filter" class="font-mono text-indigo-400">
-          filtro: "{{ filter.toUpperCase() }}"
-        </span>
+      <!-- Paginação -->
+      <div class="px-4 py-2.5 border-t border-gray-200 dark:border-gray-700">
+        <Pagination
+          :total-items="sorted.length"
+          :page-size="pageSize"
+          :current-page="currentPage"
+          :page-size-options="PAGE_SIZE_OPTIONS"
+          @update:page-size="pageSize = $event"
+          @update:current-page="currentPage = $event"
+        />
       </div>
     </div>
 

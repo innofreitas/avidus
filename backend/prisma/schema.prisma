@@ -63,6 +63,18 @@ model StockDataCache {
   @@map("stock_data_cache")
 }
 
+model Stock {
+  id        String   @id @default(cuid())
+  ticker    String
+  sector    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ticker, sector])
+  @@map("stocks")
+}
+
 model StockAnalysis {
   id           String          @id @default(uuid())
   ticker       String
@@ -77,4 +89,14 @@ model StockAnalysis {
 
   @@index([ticker, profile, date])
   @@map("stock_analyses")
+}
+
+model StockSector {
+  id        String   @id @default(uuid())
+  sectorEn  String   @unique // Setor original (brapi, Yahoo, etc) — normalizado
+  sectorPt  String   // Tradução em português (pt-BR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("stock_sectors")
 }

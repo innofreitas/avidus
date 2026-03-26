@@ -5,6 +5,7 @@ import { Router as StockRouter } from "express";
 import { getAllProfiles, getProfile, updateIndicators, updateThresholds, resetAll, resetProfile } from "../controllers/configController";
 import { analyzeStockHandler, invalidateCacheHandler, listCacheHandler } from "../controllers/stockController";
 import { backtestHandler } from "../controllers/backtestController";
+import { listStocksHandler, loadStocksHandler, listSectorsHandler, createSectorHandler, updateSectorHandler, deleteSectorHandler } from "../controllers/stocksController";
 
 const configRouter = ConfigRouter();
 configRouter.get("/profiles",                   getAllProfiles);
@@ -22,9 +23,18 @@ stockRouter.delete("/cache/:ticker", invalidateCacheHandler);
 const backtestRouter = Router();
 backtestRouter.post("/", backtestHandler);
 
+const stocksRouter = Router();
+stocksRouter.get("/",                    listStocksHandler);
+stocksRouter.get("/sectors",             listSectorsHandler);
+stocksRouter.post("/sectors",            createSectorHandler);
+stocksRouter.put("/sectors/:sectorEn",   updateSectorHandler);
+stocksRouter.delete("/sectors/:sectorEn", deleteSectorHandler);
+stocksRouter.post("/load",               loadStocksHandler);
+
 const router = Router();
 router.use("/config",    configRouter);
 router.use("/stock",     stockRouter);
+router.use("/stocks",    stocksRouter);
 router.use("/backtest",  backtestRouter);
 
 export default router;
