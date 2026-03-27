@@ -103,7 +103,23 @@ async function loadComparison() {
       return;
     }
 
-    results.value = response.data.data;
+    // Normalizar resposta: compareTickersHandler retorna array, comparePortfolioHandler retorna objeto por setor
+    if (Array.isArray(response.data.data)) {
+      // Agrupar array por setor
+      const grouped: SectorResults = {};
+      for (const result of response.data.data) {
+        const sector = result.sector || "Setor Desconhecido";
+        if (!grouped[sector]) {
+          grouped[sector] = [];
+        }
+        grouped[sector].push(result);
+      }
+      results.value = grouped;
+    } else {
+      // Já é um objeto por setor
+      results.value = response.data.data;
+    }
+
     date.value = response.data.date;
 
     // Marcar tickers que vieram do portfólio
