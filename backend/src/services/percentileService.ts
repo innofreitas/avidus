@@ -8,9 +8,8 @@
 // Grupos de indicadores mapeados para fatores
 const FACTOR_GROUPS: Record<string, string[]> = {
   valor:       ["pl", "pvp", "evEbit"],
-  qualidade:   ["roe", "margemLiquida", "roa"],
-  momentum:    ["rsi", "macd"],
-  crescimento: ["earningsGrowth", "dividendYield"]
+  qualidade:   ["roe", "margemLiquida", "roa", "dividaEbitda"],
+  crescimento: ["earningsGrowth", "dividendYield", "payoutRatio"]
 };
 
 // Direção de cada indicador: true = maior é melhor
@@ -23,20 +22,18 @@ const HIGHER_IS_BETTER: Record<string, boolean> = {
   roe: true,
   margemLiquida: true,
   roa: true,
-  // Momentum (maior é melhor)
-  rsi: true,
-  macd: true,
+  dividaEbitda: false,  // Menor é melhor (menos dívida)
   // Crescimento (maior é melhor)
   earningsGrowth: true,
-  dividendYield: true
+  dividendYield: true,
+  payoutRatio: true     // Distribuição de lucros
 };
 
 // Pesos dos fatores no score composto
 const FACTOR_WEIGHTS: Record<string, number> = {
-  valor: 0.30,
-  qualidade: 0.30,
-  momentum: 0.20,
-  crescimento: 0.20
+  valor: 0.30,       // Valuation (30%)
+  qualidade: 0.35,   // Qualidade + Saúde Financeira (35%)
+  crescimento: 0.35  // Crescimento + Dividendos (35%)
 };
 
 /**
@@ -44,7 +41,6 @@ const FACTOR_WEIGHTS: Record<string, number> = {
  */
 export function extractIndicators(rawData: any): Record<string, number | null> {
   const f = rawData?.fundamental;
-  const t = rawData?.technical;
 
   return {
     // Valor (menor é melhor)
@@ -56,14 +52,12 @@ export function extractIndicators(rawData: any): Record<string, number | null> {
     roe: f?.rentabilidade?.returnOnEquity ?? null,
     margemLiquida: f?.rentabilidade?.profitMargins ?? null,
     roa: f?.rentabilidade?.returnOnAssets ?? null,
-
-    // Momentum (maior é melhor)
-    rsi: t?.oscillators?.rsi14 ?? null,
-    macd: t?.macdHist ?? null,
+    dividaEbitda: f?.endividamento?.dividaEbitda ?? null,
 
     // Crescimento (maior é melhor)
     earningsGrowth: f?.crescimento?.earningsGrowthYoY ?? null,
-    dividendYield: f?.dividendos?.dividendYield ?? null
+    dividendYield: f?.dividendos?.dividendYield ?? null,
+    payoutRatio: f?.dividendos?.payoutRatio ?? null
   };
 }
 
