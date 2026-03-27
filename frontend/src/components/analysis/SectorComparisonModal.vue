@@ -166,6 +166,117 @@ function formatScore(val: number | null): string {
   return val != null ? Math.round(val).toString() : "—";
 }
 
+// Análise de Moat (Vantagens Competitivas)
+function analyzeMoat(result: ComparisonResult): { strength: string; indicators: string[] } {
+  const indicators: string[] = [];
+  let score = 0;
+
+  // ROE sustentável (>15% é bom)
+  if ((result.percentiles.roe ?? 0) >= 67) {
+    indicators.push("✓ ROE acima de 67% (rentabilidade sustentável)");
+    score += 2;
+  } else if ((result.percentiles.roe ?? 0) >= 34) {
+    indicators.push("○ ROE moderado (67%-34%)");
+    score += 1;
+  } else {
+    indicators.push("✗ ROE baixo (abaixo de 34%)");
+  }
+
+  // Margem de lucro (>10% é bom)
+  if ((result.percentiles.margemLiquida ?? 0) >= 67) {
+    indicators.push("✓ Margem alta (poder de preço forte)");
+    score += 2;
+  } else if ((result.percentiles.margemLiquida ?? 0) >= 34) {
+    indicators.push("○ Margem moderada");
+    score += 1;
+  }
+
+  // Crescimento de earnings
+  if ((result.percentiles.crescimento ?? 0) >= 67) {
+    indicators.push("✓ Crescimento acelerado (expansão de receita)");
+    score += 2;
+  } else if ((result.percentiles.crescimento ?? 0) >= 34) {
+    indicators.push("○ Crescimento moderado");
+    score += 1;
+  }
+
+  // Baixo endividamento
+  if ((result.percentiles.dividaEbitda ?? 0) === null) {
+    indicators.push("⚠ Endividamento não disponível");
+  } else if ((result.percentiles.dividaEbitda ?? 0) <= 33) {
+    indicators.push("✓ Dívida/EBITDA baixa (balanço saudável)");
+    score += 2;
+  } else if ((result.percentiles.dividaEbitda ?? 0) <= 66) {
+    indicators.push("○ Endividamento moderado");
+    score += 1;
+  } else {
+    indicators.push("✗ Alto endividamento (risco financeiro)");
+  }
+
+  const strength = score >= 6 ? "Forte" : score >= 4 ? "Moderada" : "Fraca";
+  return { strength, indicators };
+}
+
+// Análise de Risco
+function analyzeRisk(result: ComparisonResult): { level: string; warnings: string[] } {
+  const warnings: string[] = [];
+  let riskScore = 0;
+
+  // Beta alto = mais volátil
+  if ((result.percentiles.beta ?? 0) > 66) {
+    warnings.push("⚠ Beta alto (volatilidade elevada)");
+    riskScore += 2;
+  }
+
+  // RSI extremo = possível reversão
+  const rsi = result.percentiles.rsi ?? 50;
+  if (rsi > 70) {
+    warnings.push("⚠ RSI > 70 (possível sobrecompra)");
+    riskScore += 1;
+  } else if (rsi < 30) {
+    warnings.push("⚠ RSI < 30 (possível sobrevenda)");
+    riskScore += 1;
+  }
+
+  // Volatilidade
+  if ((result.percentiles.volatilidade ?? 0) > 66) {
+    warnings.push("⚠ Volatilidade alta (instabilidade de preço)");
+    riskScore += 2;
+  }
+
+  // P/L muito baixo pode indicar armadilha de valor
+  if ((result.percentiles.pl ?? 0) <= 20) {
+    warnings.push("🔍 P/L muito baixo (verificar sustentabilidade dos ganhos)");
+    riskScore += 1;
+  }
+
+  if (warnings.length === 0) {
+    warnings.push("✓ Perfil de risco moderado");
+  }
+
+  const level = riskScore >= 4 ? "Alto" : riskScore >= 2 ? "Moderado" : "Baixo";
+  return { level, warnings };
+}
+
+// Recomendação final
+function getRecommendation(result: ComparisonResult): string {
+  const moat = analyzeMoat(result);
+  const risk = analyzeRisk(result);
+  const composite = result.composite;
+
+  if (composite >= 75 && moat.strength === "Forte" && risk.level !== "Alto") {
+    return "🟢 FORTE COMPRA - Excelente score, moat forte e risco controlado";
+  } else if (composite >= 60 && moat.strength !== "Fraca" && risk.level !== "Alto") {
+    return "🟢 COMPRA - Bom score com fundamentos sólidos";
+  } else if (composite >= 50 && risk.level !== "Alto") {
+    return "🟡 MANTER - Score aceitável, mas avaliar moat e riscos";
+  } else if (composite >= 40) {
+    return "🟠 VENDA - Score fraco, requer validação antes de comprar";
+  } else {
+    return "🔴 EVITAR - Score baixo ou risco elevado";
+  }
+}
+
 onMounted(() => {
   loadComparison();
 });
@@ -340,6 +451,126 @@ onMounted(() => {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Aba de Insights -->
+          <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">📊 Insights e Análise Qualitativa</h2>
+
+            <!-- Líderes de Setor -->
+            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-950/30 p-4">
+              <h3 class="font-semibold text-gray-900 dark:text-white mb-3">🏆 Líderes de Setor</h3>
+              <div class="space-y-2">
+                <div v-for="(row, idx) in currentSectorResults.slice(0, 3)" :key="row.ticker" class="flex items-center justify-between p-2 bg-white dark:bg-gray-800/50 rounded">
+                  <div>
+                    <span class="font-semibold text-indigo-600 dark:text-indigo-400">{{ idx + 1 }}. {{ row.ticker }}</span>
+                    <span v-if="row.fromPortfolio" class="ml-2 text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-full">Do Portfólio</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="font-bold" :style="{ color: getScoreColor(row.composite) }">{{ Math.round(row.composite) }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Score</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Análise Individual por Ação -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div v-for="row in currentSectorResults" :key="row.ticker" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
+                <!-- Header do Card -->
+                <div class="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <span class="font-mono font-bold text-lg text-indigo-600 dark:text-indigo-400">{{ row.ticker }}</span>
+                    <div class="text-right">
+                      <div class="font-bold text-lg" :style="{ color: getScoreColor(row.composite) }">{{ Math.round(row.composite) }}</div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">Score Composto</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Recomendação -->
+                <div class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                  <div class="font-semibold text-sm">{{ getRecommendation(row) }}</div>
+                </div>
+
+                <!-- Análise de Moat -->
+                <div class="mb-4">
+                  <div class="font-semibold text-sm text-gray-900 dark:text-white mb-2">🏰 Vantagens Competitivas (Moat)</div>
+                  <div class="bg-gray-50 dark:bg-gray-800/30 rounded p-2 text-xs space-y-1">
+                    <div class="font-semibold" :class="[
+                      analyzeMoat(row).strength === 'Forte' ? 'text-green-700 dark:text-green-400' :
+                      analyzeMoat(row).strength === 'Moderada' ? 'text-yellow-700 dark:text-yellow-400' :
+                      'text-red-700 dark:text-red-400'
+                    ]">
+                      Força: {{ analyzeMoat(row).strength }}
+                    </div>
+                    <div v-for="(ind, i) in analyzeMoat(row).indicators" :key="i" class="text-gray-700 dark:text-gray-300">
+                      {{ ind }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Análise de Risco -->
+                <div>
+                  <div class="font-semibold text-sm text-gray-900 dark:text-white mb-2">⚠️ Perfil de Risco</div>
+                  <div class="bg-gray-50 dark:bg-gray-800/30 rounded p-2 text-xs space-y-1">
+                    <div class="font-semibold" :class="[
+                      analyzeRisk(row).level === 'Alto' ? 'text-red-700 dark:text-red-400' :
+                      analyzeRisk(row).level === 'Moderado' ? 'text-yellow-700 dark:text-yellow-400' :
+                      'text-green-700 dark:text-green-400'
+                    ]">
+                      Nível: {{ analyzeRisk(row).level }}
+                    </div>
+                    <div v-for="(warn, i) in analyzeRisk(row).warnings" :key="i" class="text-gray-700 dark:text-gray-300">
+                      {{ warn }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Check-list Qualitativo -->
+            <div class="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/20 p-4">
+              <h3 class="font-semibold text-gray-900 dark:text-white mb-3">✅ Check-list Qualitativo de Decisão</h3>
+              <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Governança:</strong> Gestores têm "skin in the game"? Controlador investe junto?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Transparência:</strong> Empresa cumpre guidances? Relatórios são claros?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Moat:</strong> Existe barreira de entrada (marca, patentes, custos de troca)?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Poder de Preço:</strong> Consegue repassar inflação aos clientes?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Disrupção:</strong> Setor está em declínio ou é duradouro?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Ciclicidade:</strong> Bom desempenho é sustentável ou topo de ciclo?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Riscos Regulatórios:</strong> Concessões, leis ou mudanças contratuais em risco?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Passivos Ocultos:</strong> Processos judiciais, riscos ambientais ou trabalhistas?</span>
+                </li>
+                <li class="flex gap-2">
+                  <span>☐</span>
+                  <span><strong>Investimento Futuro:</strong> Capex em novos projetos sinalizando crescimento?</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>
