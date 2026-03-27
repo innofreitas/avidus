@@ -59,8 +59,7 @@ async function load() {
   error.value      = null;
   expandedId.value = null;
   try {
-    const q   = filter.value.trim() ? `?ticker=${filter.value.trim().toUpperCase()}` : "";
-    const res = await api.get<{ success: boolean; data: CacheRow[] }>(`/stock/cache${q}`);
+    const res = await api.get<{ success: boolean; data: CacheRow[] }>("/stock/cache");
     rows.value = res.data.data ?? [];
   } catch (e: any) {
     error.value = e?.message ?? "Erro ao carregar cache";
@@ -71,7 +70,12 @@ async function load() {
 
 onMounted(load);
 
-// ─── Ordenação ────────────────────────────────────────────────
+// ─── Filtragem + Ordenação ────────────────────────────────────
+
+const filtered = computed(() => {
+  const q = filter.value.trim().toUpperCase();
+  return rows.value.filter(r => !q || r.ticker.includes(q));
+});
 
 function setSort(f: "ticker" | "date" | "updatedAt") {
   if (sortField.value === f) sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
@@ -79,7 +83,7 @@ function setSort(f: "ticker" | "date" | "updatedAt") {
 }
 
 const sorted = computed(() =>
-  [...rows.value].sort((a, b) => {
+  [...filtered.value].sort((a, b) => {
     const va = String(a[sortField.value] ?? "");
     const vb = String(b[sortField.value] ?? "");
     return sortDir.value === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -206,14 +210,10 @@ function fmtJson(obj: any): string {
     <div class="card flex items-center gap-3 py-3">
       <input
         v-model="filter"
-        @keyup.enter="load"
-        placeholder="Filtrar por ticker (ex: PETR4) — Enter para buscar"
+        placeholder="Filtrar por ticker (ex: PETR4)"
         class="input flex-1 font-mono text-sm uppercase"
       />
-      <button @click="load" :disabled="loading" class="btn-primary text-sm">
-        Buscar
-      </button>
-      <button v-if="filter" @click="filter = ''; load()" class="btn-secondary text-sm">
+      <button v-if="filter" @click="filter = ''" class="btn-secondary text-sm">
         ✕ Limpar
       </button>
     </div>
