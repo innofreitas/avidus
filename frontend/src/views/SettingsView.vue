@@ -194,7 +194,7 @@ async function resetToDefaultFactors() {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto space-y-6">
+  <div class="max-w-full mx-auto px-4 md:px-6 lg:px-8 space-y-6">
 
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-3">
@@ -236,10 +236,10 @@ async function resetToDefaultFactors() {
       <p>Perfil não encontrado.</p>
     </div>
 
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
 
       <!-- Indicadores -->
-      <div class="card">
+      <div class="card flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold">📊 Pesos dos Indicadores</h2>
           <span :class="['text-sm font-mono px-2 py-0.5 rounded', weightOk ? 'text-green-600 bg-green-50 dark:bg-green-950' : 'text-red-600 bg-red-50 dark:bg-red-950']">
@@ -249,7 +249,7 @@ async function resetToDefaultFactors() {
 
         <p v-if="!weightOk" class="text-red-500 text-xs mb-3">⚠️ Soma dos pesos não pode ultrapassar 100</p>
 
-        <div class="space-y-3 max-h-96 overflow-y-auto pr-1">
+        <div class="space-y-3 max-h-96 overflow-y-auto pr-1 flex-1">
           <div v-for="ind in localInds" :key="ind.indicatorId" class="flex items-center gap-2">
             <span class="text-sm text-gray-600 dark:text-gray-400 w-36 truncate flex-shrink-0">
               {{ INDICATOR_LABELS[ind.indicatorId] ?? ind.indicatorId }}
@@ -273,11 +273,11 @@ async function resetToDefaultFactors() {
       </div>
 
       <!-- Thresholds -->
-      <div class="card">
+      <div class="card flex flex-col">
         <h2 class="font-semibold mb-4">🎯 Scores de Recomendação</h2>
         <p class="text-xs text-gray-500 mb-4">Score mínimo para cada decisão (0 a 100).</p>
 
-        <div class="space-y-3">
+        <div class="space-y-3 flex-1 overflow-y-auto">
           <div v-for="thr in localThrs" :key="thr.decision"
             class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <span class="text-lg w-8 text-center flex-shrink-0">{{ thr.emoji }}</span>
@@ -302,7 +302,7 @@ async function resetToDefaultFactors() {
       </div>
 
       <!-- Sector Factor Weights -->
-      <div class="card">
+      <div class="card flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold">📊 Pesos Fatoriais</h2>
           <span :class="['text-sm font-mono px-2 py-0.5 rounded', weightFactorsOk ? 'text-green-600 bg-green-50 dark:bg-green-950' : 'text-red-600 bg-red-50 dark:bg-red-950']">
@@ -314,7 +314,7 @@ async function resetToDefaultFactors() {
 
         <p v-if="!weightFactorsOk" class="text-red-500 text-xs mb-3">⚠️ Soma deve ser 100% (±1%)</p>
 
-        <div class="space-y-3 max-h-72 overflow-y-auto pr-1">
+        <div class="space-y-3 flex-1 overflow-y-auto pr-1">
           <div v-for="fac in localFactors" :key="fac.factor" class="flex items-center gap-2">
             <span class="text-sm text-gray-600 dark:text-gray-400 w-36 truncate flex-shrink-0 capitalize">
               {{ fac.factor }}
