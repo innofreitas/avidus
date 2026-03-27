@@ -125,6 +125,72 @@ async function doResetAll() {
     saving.value = false;
   }
 }
+
+async function resetToDefaultIndicators() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Restaurar padrão",
+    html: `Deseja restaurar os indicadores do perfil <strong>${active.value}</strong> aos valores padrão?`,
+    icon: "info",
+    showCancelButton: true,
+    confirmButtonText: "Restaurar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function resetToDefaultThresholds() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Restaurar padrão",
+    html: `Deseja restaurar os scores do perfil <strong>${active.value}</strong> aos valores padrão?`,
+    icon: "info",
+    showCancelButton: true,
+    confirmButtonText: "Restaurar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function resetToDefaultFactors() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Restaurar padrão",
+    html: `Deseja restaurar os pesos fatoriais do perfil <strong>${active.value}</strong> aos valores padrão?`,
+    icon: "info",
+    showCancelButton: true,
+    confirmButtonText: "Restaurar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -170,7 +236,7 @@ async function doResetAll() {
       <p>Perfil não encontrado.</p>
     </div>
 
-    <div v-else class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
 
       <!-- Indicadores -->
       <div class="card">
@@ -196,7 +262,10 @@ async function doResetAll() {
           </div>
         </div>
 
-        <div class="mt-4 flex justify-end">
+        <div class="mt-4 flex gap-2 justify-between">
+          <button @click="resetToDefaultIndicators" :disabled="saving" class="btn-secondary text-sm">
+            🔄 Restaurar Padrão
+          </button>
           <button @click="saveIndicators" :disabled="saving || !weightOk" class="btn-primary text-sm">
             {{ saving ? "Salvando..." : "Salvar Indicadores" }}
           </button>
@@ -222,7 +291,10 @@ async function doResetAll() {
           </div>
         </div>
 
-        <div class="mt-4 flex justify-end">
+        <div class="mt-4 flex gap-2 justify-between">
+          <button @click="resetToDefaultThresholds" :disabled="saving" class="btn-secondary text-sm">
+            🔄 Restaurar Padrão
+          </button>
           <button @click="saveThresholds" :disabled="saving" class="btn-primary text-sm">
             {{ saving ? "Salvando..." : "Salvar Thresholds" }}
           </button>
@@ -257,7 +329,10 @@ async function doResetAll() {
           </div>
         </div>
 
-        <div class="mt-4 flex justify-end">
+        <div class="mt-4 flex gap-2 justify-between">
+          <button @click="resetToDefaultFactors" :disabled="saving" class="btn-secondary text-sm">
+            🔄 Restaurar Padrão
+          </button>
           <button @click="saveSectorFactorWeights" :disabled="saving || !weightFactorsOk" class="btn-primary text-sm">
             {{ saving ? "Salvando..." : "Salvar Pesos" }}
           </button>
