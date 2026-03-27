@@ -49,21 +49,14 @@ const emit = defineEmits<{
 const loading = ref(true);
 const error = ref<string | null>(null);
 const results = ref<SectorResults>({});
-const activeTab = ref<string>("");
 const date = ref("");
 const activeContent = ref<"comparacao" | "insights">("comparacao");
 const sortBy = ref<string | null>(null);
 const sortOrder = ref<"asc" | "desc">("desc");
 
-// Abas calculadas
-const sectors = computed(() => {
-  const all = Object.keys(results.value).sort();
-  return props.sectorFilter ? all.filter(s => s === props.sectorFilter) : all;
-});
-
 // Ordenação de tabelas
 const currentSectorResults = computed(() => {
-  const data = activeTab.value ? results.value[activeTab.value] : [];
+  const data = Object.values(results.value).flat();
   if (!sortBy.value || data.length === 0) return data;
 
   const sorted = [...data];
@@ -195,10 +188,6 @@ async function loadComparison() {
       }
     }
 
-    // Ativar primeira aba
-    if (sectors.value.length > 0) {
-      activeTab.value = sectors.value[0];
-    }
   } catch (e: any) {
     error.value = e?.message ?? "Erro ao carregar comparação";
     console.error("Erro ao carregar comparação:", e);
@@ -350,7 +339,7 @@ onMounted(() => {
                   bg-white dark:bg-gray-900 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            📊 Comparação Setorial{{ sectorPt ? ` — ${sectorPt}` : activeTab ? ` — ${activeTab}` : "" }}
+            📊 Comparação Setorial{{ sectorPt ? ` — ${sectorPt}` : "" }}
           </h1>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {{ sectorFilter ? "Tickers do setor comparados entre si" : "Percentil Setorial + Score Fatorial" }} — {{ date }}
@@ -378,9 +367,9 @@ onMounted(() => {
         </div>
 
         <!-- Vazio -->
-        <div v-else-if="sectors.length === 0" class="flex flex-col items-center justify-center py-20">
+        <div v-else-if="currentSectorResults.length === 0" class="flex flex-col items-center justify-center py-20">
           <span class="text-4xl mb-3">📭</span>
-          <p class="text-gray-500 dark:text-gray-400">Nenhum setor para comparar</p>
+          <p class="text-gray-500 dark:text-gray-400">Nenhuma ação para comparar</p>
         </div>
 
         <!-- Abas -->
@@ -413,23 +402,6 @@ onMounted(() => {
 
           <!-- ABA: COMPARAÇÃO -->
           <div v-if="activeContent === 'comparacao'" class="space-y-6">
-            <!-- Tab buttons para setores -->
-            <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-800 pb-4">
-              <button
-                v-for="sector in sectors"
-                :key="sector"
-                @click="activeTab = sector"
-                :class="[
-                  'px-4 py-2 rounded-lg font-medium transition-colors text-sm',
-                  activeTab === sector
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                ]"
-              >
-                {{ sector }} ({{ results[sector]?.length ?? 0 }})
-              </button>
-            </div>
-
             <!-- Tabela de Scores por Fator -->
             <div class="space-y-3">
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Score por Fator</h2>

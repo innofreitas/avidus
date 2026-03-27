@@ -570,14 +570,6 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                  disabled:opacity-40 disabled:cursor-not-allowed">
           📊 Backtest
         </button>
-        <!-- Botão Comparar Setor -->
-        <button @click="showSectorComparison = true"
-          :disabled="acoes.length === 0"
-          class="btn-secondary text-sm flex items-center gap-2 border border-indigo-400 dark:border-indigo-600
-                 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40
-                 disabled:opacity-40 disabled:cursor-not-allowed">
-          📊 Comparar Setor
-        </button>
       </div>
 
       <div class="overflow-x-auto">
