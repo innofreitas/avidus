@@ -138,6 +138,7 @@ function handleCompare() {
 
   // Incluir sempre o ticker selecionado + os selecionados pelo user
   const tickers = [props.ticker, ...Array.from(selected.value)].sort();
+  console.log("Comparando tickers:", tickers);
   emit("compare", tickers);
 }
 

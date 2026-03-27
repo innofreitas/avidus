@@ -96,7 +96,7 @@ async function loadComparison() {
     }
 
     const query = `tickers=${tickers.join(",")}`;
-    const response = await api.get<ApiResponse>(`/comparison/portfolio?${query}`);
+    const response = await api.get<ApiResponse>(`/comparison/tickers?${query}`);
 
     if (!response.data.success) {
       error.value = response.data.error?.message ?? "Erro ao comparar";
