@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import api from "@/utils/api";
+import { formatDate } from "@/utils/formatters";
 
 interface AcaoRow {
   codigo: string;
@@ -53,6 +54,7 @@ const date = ref("");
 const activeContent = ref<"comparacao" | "insights">("comparacao");
 const sortBy = ref<string | null>(null);
 const sortOrder = ref<"asc" | "desc">("desc");
+const expandedInsights = ref<Set<string>>(new Set());
 
 // Ordenação de tabelas
 const currentSectorResults = computed(() => {
@@ -108,6 +110,19 @@ function toggleSort(column: string) {
 function getSortIcon(column: string): string {
   if (sortBy.value !== column) return "↕";
   return sortOrder.value === "asc" ? "↑" : "↓";
+}
+
+function toggleInsightExpanded(ticker: string) {
+  if (expandedInsights.value.has(ticker)) {
+    expandedInsights.value.delete(ticker);
+  } else {
+    expandedInsights.value.add(ticker);
+  }
+  expandedInsights.value = new Set(expandedInsights.value);
+}
+
+function isInsightExpanded(ticker: string): boolean {
+  return expandedInsights.value.has(ticker);
 }
 
 // Indicadores para exibição na heatmap
@@ -344,7 +359,7 @@ onMounted(() => {
             📊 Comparação Setorial{{ sectorPt ? ` — ${sectorPt}` : "" }}
           </h1>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {{ sectorFilter ? "Tickers do setor comparados entre si" : "Percentil Setorial + Score Fatorial" }} — {{ date }}
+            {{ sectorFilter ? "Tickers do setor comparados entre si" : "Percentil Setorial + Score Fatorial" }} — {{ formatDate(date) }}
           </p>
         </div>
         <button
@@ -490,7 +505,17 @@ onMounted(() => {
             <!-- Heatmap de Indicadores -->
             <div class="space-y-3">
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Percentis de Indicadores</h2>
-              <p class="text-xs text-gray-500 dark:text-gray-400">Verde: melhor que 67% | Amarelo: melhor que 34% | Vermelho: abaixo de 34%</p>
+              <div class="flex gap-3 flex-wrap">
+                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs font-medium">
+                  🟢 Verde: melhor que 67%
+                </span>
+                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 text-xs font-medium">
+                  🟡 Amarelo: melhor que 34%
+                </span>
+                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 text-xs font-medium">
+                  🔴 Vermelho: abaixo de 34%
+                </span>
+              </div>
 
               <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                 <table class="w-full text-sm">
@@ -527,128 +552,75 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          </div>
 
           <!-- ABA: INSIGHTS -->
           <div v-if="activeContent === 'insights'" class="space-y-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">📊 Insights e Análise Qualitativa</h2>
 
             <!-- Líderes de Setor -->
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-950/30 p-4">
+            <div>
               <h3 class="font-semibold text-gray-900 dark:text-white mb-3">🏆 Líderes de Setor</h3>
-              <div class="space-y-2">
-                <div v-for="(row, idx) in currentSectorResults.slice(0, 3)" :key="row.ticker" class="flex items-center justify-between p-2 bg-white dark:bg-gray-800/50 rounded">
-                  <div>
-                    <span class="font-semibold text-indigo-600 dark:text-indigo-400">{{ idx + 1 }}. {{ row.ticker }}</span>
-                    <span v-if="row.fromPortfolio" class="ml-2 text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-full">Do Portfólio</span>
-                  </div>
-                  <div class="text-right">
-                    <div class="font-bold" :style="{ color: getScoreColor(row.composite) }">{{ Math.round(row.composite) }}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Score</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+              <div class="border-t border-gray-300 dark:border-gray-700">
+                <div v-for="(row, idx) in currentSectorResults" :key="row.ticker" class="border-b border-gray-300 dark:border-gray-700">
+                  <!-- Linha Principal do Líder -->
+                  <div class="py-3 px-4 flex items-center justify-between gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                    <div class="flex items-center gap-3 flex-1">
+                      <span class="font-bold text-lg text-indigo-600 dark:text-indigo-400 w-8">{{ idx + 1 }}.</span>
+                      <div>
+                        <span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">{{ row.ticker }}</span>
+                        <span v-if="row.fromPortfolio" class="ml-2 text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-full">Do Portfólio</span>
+                      </div>
+                    </div>
 
-            <!-- Análise Individual por Ação -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div v-for="row in currentSectorResults" :key="row.ticker" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
-                <!-- Header do Card -->
-                <div class="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center justify-between">
-                    <span class="font-mono font-bold text-lg text-indigo-600 dark:text-indigo-400">{{ row.ticker }}</span>
-                    <div class="text-right">
-                      <div class="font-bold text-lg" :style="{ color: getScoreColor(row.composite) }">{{ Math.round(row.composite) }}</div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">Score Composto</div>
+                    <div class="flex-1 text-sm text-gray-700 dark:text-gray-300">
+                      {{ getRecommendation(row) }}
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                      <div class="text-right">
+                        <div class="font-bold text-lg" :style="{ color: getScoreColor(row.composite) }">{{ Math.round(row.composite) }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">Score</div>
+                      </div>
+
+                      <button
+                        @click="toggleInsightExpanded(row.ticker)"
+                        class="px-3 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 font-semibold text-xs transition-colors whitespace-nowrap"
+                      >
+                        {{ isInsightExpanded(row.ticker) ? '▲ Fechar' : '▼ Detalhes' }}
+                      </button>
                     </div>
                   </div>
-                </div>
 
-                <!-- Recomendação -->
-                <div class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                  <div class="font-semibold text-sm">{{ getRecommendation(row) }}</div>
-                </div>
+                  <!-- Insights Expansíveis -->
+                  <div v-if="isInsightExpanded(row.ticker)" class="bg-indigo-50 dark:bg-indigo-950/20 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                    <div class="grid grid-cols-2 gap-4">
+                      <!-- Análise de Moat -->
+                      <div>
+                        <div class="font-semibold text-xs text-gray-900 dark:text-white mb-2">🏰 Moat - {{ analyzeMoat(row).strength }}</div>
+                        <div class="text-xs space-y-1">
+                          <div v-for="(ind, i) in analyzeMoat(row).indicators" :key="i" class="text-gray-700 dark:text-gray-300">
+                            {{ ind }}
+                          </div>
+                        </div>
+                      </div>
 
-                <!-- Análise de Moat -->
-                <div class="mb-4">
-                  <div class="font-semibold text-sm text-gray-900 dark:text-white mb-2">🏰 Vantagens Competitivas (Moat)</div>
-                  <div class="bg-gray-50 dark:bg-gray-800/30 rounded p-2 text-xs space-y-1">
-                    <div class="font-semibold" :class="[
-                      analyzeMoat(row).strength === 'Forte' ? 'text-green-700 dark:text-green-400' :
-                      analyzeMoat(row).strength === 'Moderada' ? 'text-yellow-700 dark:text-yellow-400' :
-                      'text-red-700 dark:text-red-400'
-                    ]">
-                      Força: {{ analyzeMoat(row).strength }}
-                    </div>
-                    <div v-for="(ind, i) in analyzeMoat(row).indicators" :key="i" class="text-gray-700 dark:text-gray-300">
-                      {{ ind }}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Análise de Risco -->
-                <div>
-                  <div class="font-semibold text-sm text-gray-900 dark:text-white mb-2">⚠️ Perfil de Risco</div>
-                  <div class="bg-gray-50 dark:bg-gray-800/30 rounded p-2 text-xs space-y-1">
-                    <div class="font-semibold" :class="[
-                      analyzeRisk(row).level === 'Alto' ? 'text-red-700 dark:text-red-400' :
-                      analyzeRisk(row).level === 'Moderado' ? 'text-yellow-700 dark:text-yellow-400' :
-                      'text-green-700 dark:text-green-400'
-                    ]">
-                      Nível: {{ analyzeRisk(row).level }}
-                    </div>
-                    <div v-for="(warn, i) in analyzeRisk(row).warnings" :key="i" class="text-gray-700 dark:text-gray-300">
-                      {{ warn }}
+                      <!-- Análise de Risco -->
+                      <div>
+                        <div class="font-semibold text-xs text-gray-900 dark:text-white mb-2">⚠️ Risco - {{ analyzeRisk(row).level }}</div>
+                        <div class="text-xs space-y-1">
+                          <div v-for="(warn, i) in analyzeRisk(row).warnings" :key="i" class="text-gray-700 dark:text-gray-300">
+                            {{ warn }}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <!-- Check-list Qualitativo -->
-            <div class="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/20 p-4">
-              <h3 class="font-semibold text-gray-900 dark:text-white mb-3">✅ Check-list Qualitativo de Decisão</h3>
-              <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Governança:</strong> Gestores têm "skin in the game"? Controlador investe junto?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Transparência:</strong> Empresa cumpre guidances? Relatórios são claros?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Moat:</strong> Existe barreira de entrada (marca, patentes, custos de troca)?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Poder de Preço:</strong> Consegue repassar inflação aos clientes?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Disrupção:</strong> Setor está em declínio ou é duradouro?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Ciclicidade:</strong> Bom desempenho é sustentável ou topo de ciclo?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Riscos Regulatórios:</strong> Concessões, leis ou mudanças contratuais em risco?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Passivos Ocultos:</strong> Processos judiciais, riscos ambientais ou trabalhistas?</span>
-                </li>
-                <li class="flex gap-2">
-                  <span>☐</span>
-                  <span><strong>Investimento Futuro:</strong> Capex em novos projetos sinalizando crescimento?</span>
-                </li>
-              </ul>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
 </template>

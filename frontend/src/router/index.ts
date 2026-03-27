@@ -14,7 +14,6 @@ export default createRouter({
         { path: "stocks",      name: "stocks",      component: () => import("@/views/StocksView.vue")      },
         { path: "sectors",     name: "sectors",     component: () => import("@/views/SectorsView.vue")     },
         { path: "cache",       name: "cache",       component: () => import("@/views/CacheView.vue")       },
-        { path: "comparison",  name: "comparison",  component: () => import("@/views/ComparisonView.vue")  },
       ],
     },
   ],

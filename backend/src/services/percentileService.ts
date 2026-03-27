@@ -58,11 +58,11 @@ export function extractIndicators(rawData: any): Record<string, number | null> {
     roe: f?.rentabilidade?.returnOnEquity ?? null,
     margemLiquida: f?.rentabilidade?.profitMargins ?? null,
     roa: f?.rentabilidade?.returnOnAssets ?? null,
-    dividaEbitda: f?.endividamento?.dividaEbitda ?? null,
+    dividaEbitda: f?.divida?.dividaEbitda ?? null,
 
     // Momentum (maior é melhor)
-    rsi14: t?.indicators?.rsi14 ?? null,
-    macd: t?.indicators?.macd ?? null,
+    rsi14: t?.rsi14 ?? null,
+    macd: t?.macd ?? null,
 
     // Crescimento (maior é melhor)
     earningsGrowth: f?.crescimento?.earningsGrowthYoY ?? null,

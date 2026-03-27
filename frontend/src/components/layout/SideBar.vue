@@ -11,7 +11,6 @@ const nav = [
   { path: "/portfolio",   label: "Portfólio",    icon: "💼" },
   { path: "/stocks",      label: "Ações",        icon: "🏛️" },
   { path: "/sectors",     label: "Setores",      icon: "🏷️" },
-  { path: "/comparison",  label: "Comparação",   icon: "⚖️" },
   { path: "/cache",       label: "Cache",        icon: "🗄️" },
   { path: "/settings",    label: "Configurações", icon: "⚙️" },
 ];

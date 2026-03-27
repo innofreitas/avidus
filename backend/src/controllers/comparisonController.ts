@@ -101,6 +101,8 @@ export async function compareTickersHandler(req: Request, res: Response): Promis
 
   // Calcular percentis para cada ticker vs peers
   const results: ComparisonResult[] = [];
+  const dateObj = new Date(date);
+
   for (const ticker of tickerIndicators) {
     const peers = tickerIndicators.filter(t => t.ticker !== ticker.ticker);
 
@@ -112,6 +114,38 @@ export async function compareTickersHandler(req: Request, res: Response): Promis
         indicators: p.indicators
       }))
     );
+
+    // Salvar resultado na tabela stockSectorPercentile
+    try {
+      await (prisma as any).stockSectorPercentile.upsert({
+        where: {
+          ticker_date: {
+            ticker: ticker.ticker,
+            date: dateObj
+          }
+        },
+        update: {
+          percentiles,
+          factors,
+          composite,
+          updatedAt: new Date()
+        },
+        create: {
+          id: require("crypto").randomUUID?.() ?? Math.random().toString(36),
+          ticker: ticker.ticker,
+          sector: ticker.sector,
+          date: dateObj,
+          percentiles,
+          factors,
+          composite,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+      console.log(`✅ Resultado salvo em cache para ${ticker.ticker}`);
+    } catch (e: any) {
+      console.warn(`⚠️  Erro ao salvar StockSectorPercentile para ${ticker.ticker}: ${e.message}`);
+    }
 
     results.push({
       ticker: ticker.ticker,
