@@ -121,7 +121,9 @@ const INDICATORS_DISPLAY = [
   { key: "dividendYield", label: "DY" },
   { key: "earningsGrowth", label: "Crescimento" },
   { key: "dividaEbitda", label: "Dívida/EBITDA" },
-  { key: "payoutRatio", label: "Payout" }
+  { key: "payoutRatio", label: "Payout" },
+  { key: "rsi14", label: "RSI 14" },
+  { key: "macd", label: "MACD" }
 ];
 
 async function loadComparison() {

@@ -9,6 +9,7 @@
 const FACTOR_GROUPS: Record<string, string[]> = {
   valor:       ["pl", "pvp", "evEbit"],
   qualidade:   ["roe", "margemLiquida", "roa", "dividaEbitda"],
+  momentum:    ["rsi14", "macd"],
   crescimento: ["earningsGrowth", "dividendYield", "payoutRatio"]
 };
 
@@ -23,6 +24,9 @@ const HIGHER_IS_BETTER: Record<string, boolean> = {
   margemLiquida: true,
   roa: true,
   dividaEbitda: false,  // Menor é melhor (menos dívida)
+  // Momentum (maior é melhor)
+  rsi14: true,
+  macd: true,
   // Crescimento (maior é melhor)
   earningsGrowth: true,
   dividendYield: true,
@@ -32,8 +36,9 @@ const HIGHER_IS_BETTER: Record<string, boolean> = {
 // Pesos dos fatores no score composto
 const FACTOR_WEIGHTS: Record<string, number> = {
   valor: 0.30,       // Valuation (30%)
-  qualidade: 0.35,   // Qualidade + Saúde Financeira (35%)
-  crescimento: 0.35  // Crescimento + Dividendos (35%)
+  qualidade: 0.30,   // Qualidade + Saúde Financeira (30%)
+  momentum: 0.15,    // Momentum Técnico (15%)
+  crescimento: 0.25  // Crescimento + Dividendos (25%)
 };
 
 /**
@@ -41,6 +46,7 @@ const FACTOR_WEIGHTS: Record<string, number> = {
  */
 export function extractIndicators(rawData: any): Record<string, number | null> {
   const f = rawData?.fundamental;
+  const t = rawData?.technical;
 
   return {
     // Valor (menor é melhor)
@@ -53,6 +59,10 @@ export function extractIndicators(rawData: any): Record<string, number | null> {
     margemLiquida: f?.rentabilidade?.profitMargins ?? null,
     roa: f?.rentabilidade?.returnOnAssets ?? null,
     dividaEbitda: f?.endividamento?.dividaEbitda ?? null,
+
+    // Momentum (maior é melhor)
+    rsi14: t?.indicators?.rsi14 ?? null,
+    macd: t?.indicators?.macd ?? null,
 
     // Crescimento (maior é melhor)
     earningsGrowth: f?.crescimento?.earningsGrowthYoY ?? null,
