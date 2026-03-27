@@ -25,9 +25,19 @@ const stocks = ref<StockItem[]>([]);
 const selected = ref<Set<string>>(new Set());
 const sectorPt = ref("");
 const saveAsFavorite = ref(true);
+const filterText = ref("");
 
 const MAX_SELECTION = 5;
 const canSelectMore = computed(() => selected.value.size < MAX_SELECTION);
+const showFilter = computed(() => stocks.value.length > 5);
+const filteredStocks = computed(() => {
+  if (!filterText.value.trim()) return stocks.value;
+  const query = filterText.value.toLowerCase();
+  return stocks.value.filter(s =>
+    s.ticker.toLowerCase().includes(query) ||
+    (s.name?.toLowerCase().includes(query) ?? false)
+  );
+});
 
 // LocalStorage para favoritos
 const FAVORITES_KEY = "avidus_sector_favorites";
@@ -174,6 +184,19 @@ onMounted(() => {
 
         <!-- Lista de stocks -->
         <div v-else class="space-y-4 p-6">
+          <!-- Input de filtro (aparece se houver mais de 5 itens) -->
+          <div v-if="showFilter" class="relative">
+            <input
+              v-model="filterText"
+              type="text"
+              placeholder="🔍 Filtrar por ticker ou nome..."
+              class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800 text-gray-900 dark:text-white
+                     placeholder-gray-400 dark:placeholder-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            />
+          </div>
+
           <!-- Info de seleção -->
           <div class="space-y-2">
             <div class="flex items-center gap-2">
@@ -192,13 +215,37 @@ onMounted(() => {
             </div>
           </div>
 
+          <!-- Tickers selecionados (badges) -->
+          <div v-if="selected.size > 0" class="flex flex-wrap gap-2">
+            <span
+              v-for="ticker in Array.from(selected).sort()"
+              :key="ticker"
+              class="inline-flex items-center gap-1 px-3 py-1 rounded-full
+                     bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300
+                     text-xs font-medium"
+            >
+              ✓ {{ ticker }}
+              <button
+                @click="toggleStock(ticker)"
+                class="ml-1 text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+
+          <!-- Mensagem quando filtro não retorna resultados -->
+          <div v-if="showFilter && filteredStocks.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+            <p class="text-sm">❌ Nenhuma ação encontrada para "<strong>{{ filterText }}</strong>"</p>
+          </div>
+
           <!-- Lista de checkboxes -->
-          <div v-if="!canSelectMore" class="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs">
+          <div v-if="!canSelectMore && filteredStocks.length > 0" class="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs">
             ℹ️ Limite de 5 seleções atingido. Desselecione uma ação para adicionar outra.
           </div>
-          <div class="space-y-2 max-h-[50vh] overflow-y-auto">
+          <div v-if="filteredStocks.length > 0" class="space-y-2 max-h-[50vh] overflow-y-auto">
             <label
-              v-for="stock in stocks"
+              v-for="stock in filteredStocks"
               :key="stock.ticker"
               :class="[
                 'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors',
