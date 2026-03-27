@@ -91,7 +91,7 @@ const showBuffett           = ref(false);
 const showMagicFormula      = ref(false);
 const showBacktest          = ref(false);
 const showSectorComparison   = ref(false);
-const sectorComparison       = ref<{ tickers: string[]; sectorFilter?: string } | null>(null);
+const sectorComparison       = ref<{ tickers: string[]; sectorFilter?: string; sectorPt?: string } | null>(null);
 const comparisonTickers      = ref<string[]>([]);
 const showSectorSelection    = ref(false);
 const sectorSelectionData    = ref<{ ticker: string; sector: string } | null>(null);
@@ -982,12 +982,12 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       v-if="showSectorSelection && sectorSelectionData"
       :ticker="sectorSelectionData.ticker"
       :sector="sectorSelectionData.sector"
-      @compare="(tickers) => {
-        comparisonTickers = tickers;
+      @compare="(payload) => {
+        comparisonTickers = payload.tickers;
         showSectorSelection = false;
         sectorSelectionData = null;
         showSectorComparison = true;
-        sectorComparison = { tickers };
+        sectorComparison = { tickers: payload.tickers, sectorPt: payload.sectorPt };
       }"
       @close="showSectorSelection = false; sectorSelectionData = null"
     />
@@ -999,6 +999,7 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       :tickers="comparisonTickers.length > 0 ? comparisonTickers : undefined"
       :portfolio-tickers="acoes.map(a => a.codigo)"
       :sector-filter="sectorComparison?.sectorFilter"
+      :sector-pt="sectorComparison?.sectorPt"
       @close="showSectorComparison = false; sectorComparison = null; comparisonTickers = []"
     />
 

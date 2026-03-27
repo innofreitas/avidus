@@ -38,6 +38,7 @@ const props = defineProps<{
   sectorFilter?: string;
   tickers?: string[];
   portfolioTickers?: string[];
+  sectorPt?: string;
 }>();
 
 const emit = defineEmits<{
@@ -349,7 +350,7 @@ onMounted(() => {
                   bg-white dark:bg-gray-900 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            📊 Comparação Setorial{{ activeTab ? ` — ${activeTab}` : "" }}
+            📊 Comparação Setorial{{ sectorPt ? ` — ${sectorPt}` : activeTab ? ` — ${activeTab}` : "" }}
           </h1>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {{ sectorFilter ? "Tickers do setor comparados entre si" : "Percentil Setorial + Score Fatorial" }} — {{ date }}
