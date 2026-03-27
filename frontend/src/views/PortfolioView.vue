@@ -997,7 +997,7 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       v-if="showSectorComparison"
       :acoes="acoes"
       :tickers="comparisonTickers.length > 0 ? comparisonTickers : undefined"
-      :portfolio-tickers="comparisonTickers.length > 0 ? comparisonTickers : acoes.map(a => a.codigo)"
+      :portfolio-tickers="acoes.map(a => a.codigo)"
       :sector-filter="sectorComparison?.sectorFilter"
       @close="showSectorComparison = false; sectorComparison = null; comparisonTickers = []"
     />
