@@ -122,3 +122,61 @@ export async function deleteSectorHandler(req: Request, res: Response) {
     res.status(500).json({ success: false, error: e.message });
   }
 }
+
+// ─── GET /api/stocks/by-sector/:sector ────────────────────────────
+// Parâmetros:
+//   :sector - setor a buscar (pode ser aproximado)
+//   ?ticker - ticker para descobrir o setor correto (fallback)
+
+export async function getStocksBySectorHandler(req: Request, res: Response) {
+  let sector = (req.params.sector ?? "").trim();
+  const tickerParam = (req.query.ticker as string)?.trim();
+
+  // Se um ticker foi fornecido, buscar o setor correto desse ticker
+  if (tickerParam) {
+    try {
+      const stock = await (prisma as any).stock.findFirst({
+        where: { ticker: tickerParam.toUpperCase() }
+      });
+
+      if (stock) {
+        console.log(`🔍 Ticker ${tickerParam} → setor "${stock.sector}"`);
+        sector = stock.sector;
+      }
+    } catch (e: any) {
+      console.warn(`⚠️ Erro ao buscar setor do ticker ${tickerParam}: ${e.message}`);
+    }
+  }
+
+  if (!sector) {
+    res.status(400).json({
+      success: false,
+      error: { message: "Setor obrigatório (ou ticker inválido)" }
+    });
+    return;
+  }
+
+  try {
+    const stocks = await (prisma as any).stock.findMany({
+      where: { sector },
+      orderBy: { ticker: "asc" },
+      select: { ticker: true, name: true, sector: true }
+    });
+
+    const translations = await getAllSectorTranslations();
+    const sectorPt = translations[normalizeSectorKey(sector)] ?? sector;
+
+    res.json({
+      success: true,
+      data: stocks,
+      sector,
+      sectorPt,
+      total: stocks.length
+    });
+  } catch (e: any) {
+    res.status(500).json({
+      success: false,
+      error: { message: `Erro ao buscar stocks do setor: ${e.message}` }
+    });
+  }
+}

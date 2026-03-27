@@ -100,3 +100,18 @@ model StockSector {
 
   @@map("stock_sectors")
 }
+
+model StockSectorPercentile {
+  id         String   @id @default(cuid())
+  ticker     String
+  sector     String
+  date       DateTime
+  percentiles Json     // { pl: 73, pvp: 81, roe: 65, ... }
+  factors    Json     // { valor: 72, qualidade: 68, momentum: 55, crescimento: 61 }
+  composite  Float    // score final 0-100
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([ticker, date])
+  @@map("stock_sector_percentiles")
+}

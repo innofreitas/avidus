@@ -7,12 +7,13 @@ const route  = useRoute();
 const router = useRouter();
 
 const nav = [
-  { path: "/analysis",  label: "Análise",      icon: "📈" },
-  { path: "/portfolio", label: "Portfólio",    icon: "💼" },
-  { path: "/stocks",    label: "Ações",         icon: "🏛️" },
-  { path: "/sectors",   label: "Setores",      icon: "🏷️" },
-  { path: "/cache",     label: "Cache",         icon: "🗄️" },
-  { path: "/settings",  label: "Configurações", icon: "⚙️"  },
+  { path: "/analysis",    label: "Análise",      icon: "📈" },
+  { path: "/portfolio",   label: "Portfólio",    icon: "💼" },
+  { path: "/stocks",      label: "Ações",        icon: "🏛️" },
+  { path: "/sectors",     label: "Setores",      icon: "🏷️" },
+  { path: "/comparison",  label: "Comparação",   icon: "⚖️" },
+  { path: "/cache",       label: "Cache",        icon: "🗄️" },
+  { path: "/settings",    label: "Configurações", icon: "⚙️" },
 ];
 
 const isActive = (path: string) => route.path === path || route.path.startsWith(path);

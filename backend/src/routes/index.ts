@@ -5,7 +5,8 @@ import { Router as StockRouter } from "express";
 import { getAllProfiles, getProfile, updateIndicators, updateThresholds, resetAll, resetProfile } from "../controllers/configController";
 import { analyzeStockHandler, invalidateCacheHandler, listCacheHandler } from "../controllers/stockController";
 import { backtestHandler } from "../controllers/backtestController";
-import { listStocksHandler, loadStocksHandler, listSectorsHandler, createSectorHandler, updateSectorHandler, deleteSectorHandler } from "../controllers/stocksController";
+import { listStocksHandler, loadStocksHandler, listSectorsHandler, createSectorHandler, updateSectorHandler, deleteSectorHandler, getStocksBySectorHandler } from "../controllers/stocksController";
+import { compareTickersHandler, compareSectorHandler, comparePortfolioHandler } from "../controllers/comparisonController";
 
 const configRouter = ConfigRouter();
 configRouter.get("/profiles",                   getAllProfiles);
@@ -24,17 +25,24 @@ const backtestRouter = Router();
 backtestRouter.post("/", backtestHandler);
 
 const stocksRouter = Router();
-stocksRouter.get("/",                    listStocksHandler);
-stocksRouter.get("/sectors",             listSectorsHandler);
-stocksRouter.post("/sectors",            createSectorHandler);
-stocksRouter.put("/sectors/:sectorEn",   updateSectorHandler);
+stocksRouter.get("/",                     listStocksHandler);
+stocksRouter.get("/by-sector/:sector",    getStocksBySectorHandler);
+stocksRouter.get("/sectors",              listSectorsHandler);
+stocksRouter.post("/sectors",             createSectorHandler);
+stocksRouter.put("/sectors/:sectorEn",    updateSectorHandler);
 stocksRouter.delete("/sectors/:sectorEn", deleteSectorHandler);
-stocksRouter.post("/load",               loadStocksHandler);
+stocksRouter.post("/load",                loadStocksHandler);
+
+const comparisonRouter = Router();
+comparisonRouter.get("/tickers", compareTickersHandler);
+comparisonRouter.get("/sector/:sector", compareSectorHandler);
+comparisonRouter.get("/portfolio", comparePortfolioHandler);
 
 const router = Router();
-router.use("/config",    configRouter);
-router.use("/stock",     stockRouter);
-router.use("/stocks",    stocksRouter);
-router.use("/backtest",  backtestRouter);
+router.use("/config",      configRouter);
+router.use("/stock",       stockRouter);
+router.use("/stocks",      stocksRouter);
+router.use("/backtest",    backtestRouter);
+router.use("/comparison",  comparisonRouter);
 
 export default router;

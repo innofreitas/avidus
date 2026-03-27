@@ -6,10 +6,12 @@ import type { AnalysisResult, ProfileName } from "@/types";
 import { PROFILE_LABELS, PROFILE_ICONS, ALL_PROFILES } from "@/types";
 import { decisionColor, decisionBadgeClass, formatNumber, formatDate } from "@/utils/formatters";
 import AnalysisDetail from "@/components/analysis/AnalysisDetail.vue";
-import AnalysisBarsi        from "@/components/analysis/AnalysisBarsi.vue";
-import AnalysisBuffett      from "@/components/analysis/AnalysisBuffett.vue";
-import AnalysisMagicFormula from "@/components/analysis/AnalysisMagicFormula.vue";
-import AnalysisBacktest    from "@/components/analysis/AnalysisBacktest.vue";
+import AnalysisBarsi           from "@/components/analysis/AnalysisBarsi.vue";
+import AnalysisBuffett         from "@/components/analysis/AnalysisBuffett.vue";
+import AnalysisMagicFormula    from "@/components/analysis/AnalysisMagicFormula.vue";
+import AnalysisBacktest        from "@/components/analysis/AnalysisBacktest.vue";
+import SectorComparisonModal   from "@/components/analysis/SectorComparisonModal.vue";
+import SectorSelectionModal    from "@/components/analysis/SectorSelectionModal.vue";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -84,10 +86,15 @@ const filterTD     = ref("");
 const modalResult  = shallowRef<AnalysisResult | null>(null);
 const modalTicker  = ref("");
 const showModal    = ref(false);
-const showBarsi        = ref(false);
-const showBuffett      = ref(false);
-const showMagicFormula = ref(false);
-const showBacktest     = ref(false);
+const showBarsi              = ref(false);
+const showBuffett           = ref(false);
+const showMagicFormula      = ref(false);
+const showBacktest          = ref(false);
+const showSectorComparison   = ref(false);
+const sectorComparison       = ref<{ tickers: string[]; sectorFilter?: string } | null>(null);
+const comparisonTickers      = ref<string[]>([]);
+const showSectorSelection    = ref(false);
+const sectorSelectionData    = ref<{ ticker: string; sector: string } | null>(null);
 
 const activeTab    = ref<"acoes" | "etf" | "fundos" | "renda_fixa" | "tesouro">("acoes");
 
@@ -563,6 +570,14 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                  disabled:opacity-40 disabled:cursor-not-allowed">
           📊 Backtest
         </button>
+        <!-- Botão Comparar Setor -->
+        <button @click="showSectorComparison = true"
+          :disabled="acoes.length === 0"
+          class="btn-secondary text-sm flex items-center gap-2 border border-indigo-400 dark:border-indigo-600
+                 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40
+                 disabled:opacity-40 disabled:cursor-not-allowed">
+          📊 Comparar Setor
+        </button>
       </div>
 
       <div class="overflow-x-auto">
@@ -641,20 +656,36 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                       </span>
                     </div>
                   </div>
-                  <!-- Botão ver detalhes -->
-                  <button @click="openModal(row.recomendacao, row.codigo)"
-                    title="Ver detalhes"
-                    class="flex-shrink-0 p-1.5 rounded-lg text-indigo-500 hover:text-indigo-700
-                           hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors mt-0.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
-                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round"
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                      <path stroke-linecap="round" stroke-linejoin="round"
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
-                           -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                    </svg>
-                  </button>
+                  <!-- Botões de ação -->
+                  <div class="flex items-center gap-1">
+                    <!-- Botão ver detalhes -->
+                    <button @click="openModal(row.recomendacao, row.codigo)"
+                      title="Ver detalhes"
+                      class="flex-shrink-0 p-1.5 rounded-lg text-indigo-500 hover:text-indigo-700
+                             hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                             -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                      </svg>
+                    </button>
+                    <!-- Botão comparar setor individual -->
+                    <button
+                      v-if="row.recomendacao.result?.meta?.sector"
+                      @click="showSectorSelection = true; sectorSelectionData = { ticker: row.codigo, sector: row.recomendacao.result!.meta!.sector! }"
+                      title="Comparar neste setor"
+                      class="flex-shrink-0 p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700
+                             hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <!-- Sem análise -->
                 <span v-else class="text-xs text-gray-300 dark:text-gray-600">—</span>
@@ -944,6 +975,31 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       v-if="showBacktest"
       :acoes="acoes"
       @close="showBacktest = false"
+    />
+
+    <!-- ── Modal Seleção de Setores ──────────────────────────────────── -->
+    <SectorSelectionModal
+      v-if="showSectorSelection && sectorSelectionData"
+      :ticker="sectorSelectionData.ticker"
+      :sector="sectorSelectionData.sector"
+      @compare="(tickers) => {
+        comparisonTickers = tickers;
+        showSectorSelection = false;
+        sectorSelectionData = null;
+        showSectorComparison = true;
+        sectorComparison = { tickers };
+      }"
+      @close="showSectorSelection = false; sectorSelectionData = null"
+    />
+
+    <!-- ── Modal Comparação Setorial ────────────────────────────────── -->
+    <SectorComparisonModal
+      v-if="showSectorComparison"
+      :acoes="acoes"
+      :tickers="comparisonTickers.length > 0 ? comparisonTickers : undefined"
+      :portfolio-tickers="comparisonTickers.length > 0 ? comparisonTickers : acoes.map(a => a.codigo)"
+      :sector-filter="sectorComparison?.sectorFilter"
+      @close="showSectorComparison = false; sectorComparison = null; comparisonTickers = []"
     />
 
 </template>
