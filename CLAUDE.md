@@ -319,11 +319,11 @@ const pesoAdj = d.peso * (pesoTotal / pesoEfetivo);
 // BRAPI_TOKEN opcional (sem token: rate-limit nos 4 tickers gratuitos)
 ```
 
-### 6.12 Comparação Setorial — 4 fatores ponderados
+### 6.12 Comparação Setorial — 4 fatores ponderados (DB-driven)
 ```typescript
 // percentileService.ts exporta:
 // - extractIndicators(rawData) — extrai 11 indicadores de value/quality/momentum/growth
-// - calcSectorPercentiles(ticker, indicators, peers) — retorna percentis + factors + composite
+// - calcSectorPercentiles(ticker, indicators, peers, factorWeights?) — retorna percentis + factors + composite
 //
 // Indicadores extraídos (11 no total):
 //   Valor (menor ↓): pl, pvp, evEbit
@@ -331,9 +331,19 @@ const pesoAdj = d.peso * (pesoTotal / pesoEfetivo);
 //   Momentum (maior ↑): rsi14, macd
 //   Crescimento (maior ↑): earningsGrowth, dividendYield, payoutRatio
 //
-// Ponderação de fatores:
+// Ponderação de fatores — carregada do banco via MODERADO profile:
 //   Valor: 30%, Qualidade: 30%, Momentum: 15%, Crescimento: 25%
 //   Composite = Σ(factor_score × weight) → range 0-100
+//   Padrão fallback se tabela SectorFactorWeight estiver vazia
+//
+// Carregamento de pesos (comparisonController.ts):
+//   - getFactorWeightsFromDB() busca pesos do perfil MODERADO na tabela SectorFactorWeight
+//   - Todos os 3 handlers chamam esta função:
+//     * compareTickersHandler (ad-hoc comparison)
+//     * compareSectorHandler (setor inteiro)
+//     * comparePortfolioHandler (portfólio vs peers)
+//   - Os pesos são passados como 4º parâmetro a calcSectorPercentiles()
+//   - Se nenhum peso encontrado no banco, usa DEFAULT_FACTOR_WEIGHTS como fallback
 //
 // Cache automático: comparePortfolioHandler() salva em stockSectorPercentile
 //   - Verifica se (ticker, date) já existe
@@ -554,6 +564,11 @@ node testScraper.mjs PETR4 --fonte=investidor10
   - Cálculo: 11 indicadores × 4 fatores (Valor 30%, Qualidade 30%, Momentum 15%, Crescimento 25%)
   - Database caching: stockSectorPercentile com chave composta (ticker, date)
   - Reutilização automática de resultados no mesmo dia (Prisma upsert)
+  - **Pesos fatoriais carregados do banco** (SectorFactorWeight table, perfil MODERADO):
+    - Novo modelo Prisma: `SectorFactorWeight` com constraint `[profile, factor]`
+    - Seed automático via `prisma/seed.ts` com valores por perfil
+    - 3 handlers (compareTickersHandler, compareSectorHandler, comparePortfolioHandler) agora chamam `getFactorWeightsFromDB()`
+    - Fallback para DEFAULT_FACTOR_WEIGHTS se tabela estiver vazia
   - Frontend: Modal `SectorComparisonModal.vue` com:
     - Abas por setor (agrupamento automático)
     - Lista expandível: ranking do setor, badges "Do Portfólio", score colorido
@@ -562,6 +577,11 @@ node testScraper.mjs PETR4 --fonte=investidor10
     - Tabela detalhada: Ticker, Do Portfólio, Valor, Qualidade, Momentum, Crescimento, Score
     - Data formatada no cabeçalho da modal (formatDate utility)
   - Removida rota deprecated `/comparison` e vista `ComparisonView.vue`
+  - **SettingsView** — card "📊 Pesos Fatoriais" permite editar pesos por perfil:
+    - 4 sliders (0-100%) para Valor, Qualidade, Momentum, Crescimento
+    - Validação: soma deve ser ≈100% (±1%)
+    - Salvar via PUT `/api/config/profiles/:name/sector-factor-weights`
+    - Restaurar padrão via POST `/api/config/reset/:name`
 
 ---
 

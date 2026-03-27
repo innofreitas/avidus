@@ -6,6 +6,34 @@ import { prisma } from "../config/database";
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
+/**
+ * Busca os pesos fatoriais do perfil MODERADO do banco de dados
+ * Retorna no formato esperado por calcSectorPercentiles
+ */
+async function getFactorWeightsFromDB(): Promise<Record<string, number>> {
+  try {
+    const weights = await (prisma as any).sectorFactorWeight.findMany({
+      where: { profile: "MODERADO" }
+    }) as any[];
+
+    if (weights.length === 0) {
+      console.warn("⚠️  Nenhum peso fatorial encontrado para MODERADO — usando defaults");
+      return {};
+    }
+
+    const result: Record<string, number> = {};
+    for (const w of weights) {
+      result[w.factor] = w.weight;
+    }
+
+    console.log(`✅ Pesos fatoriais carregados do banco: ${Object.keys(result).join(", ")}`);
+    return result;
+  } catch (e: any) {
+    console.warn(`⚠️  Erro ao buscar pesos fatoriais: ${e.message} — usando defaults`);
+    return {};
+  }
+}
+
 interface TickerData {
   ticker: string;
   sector: string | null;
@@ -49,6 +77,9 @@ export async function compareTickersHandler(req: Request, res: Response): Promis
     });
     return;
   }
+
+  // Carregar pesos fatoriais do perfil MODERADO
+  const factorWeights = await getFactorWeightsFromDB();
 
   const date = today();
   const tickerDataList: TickerData[] = [];
@@ -112,7 +143,8 @@ export async function compareTickersHandler(req: Request, res: Response): Promis
       peers.map(p => ({
         ticker: p.ticker,
         indicators: p.indicators
-      }))
+      })),
+      Object.keys(factorWeights).length > 0 ? factorWeights : undefined
     );
 
     // Salvar resultado na tabela stockSectorPercentile
@@ -182,6 +214,9 @@ export async function compareSectorHandler(req: Request, res: Response): Promise
     return;
   }
 
+  // Carregar pesos fatoriais do perfil MODERADO
+  const factorWeights = await getFactorWeightsFromDB();
+
   const date = today();
 
   try {
@@ -237,7 +272,8 @@ export async function compareSectorHandler(req: Request, res: Response): Promise
         peers.map(p => ({
           ticker: p.ticker,
           indicators: p.indicators
-        }))
+        })),
+        Object.keys(factorWeights).length > 0 ? factorWeights : undefined
       );
 
       results.push({
@@ -296,6 +332,9 @@ export async function comparePortfolioHandler(req: Request, res: Response): Prom
     });
     return;
   }
+
+  // Carregar pesos fatoriais do perfil MODERADO
+  const factorWeights = await getFactorWeightsFromDB();
 
   const date = today();
   const dateObj = new Date(date);
@@ -472,7 +511,8 @@ export async function comparePortfolioHandler(req: Request, res: Response): Prom
           const { percentiles, factors, composite } = calcSectorPercentiles(
             ticker,
             data.indicators,
-            peers
+            peers,
+            Object.keys(factorWeights).length > 0 ? factorWeights : undefined
           );
 
           // Verificar/salvar em StockSectorPercentile
