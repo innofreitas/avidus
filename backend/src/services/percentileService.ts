@@ -33,8 +33,8 @@ const HIGHER_IS_BETTER: Record<string, boolean> = {
   payoutRatio: true     // Distribuição de lucros
 };
 
-// Pesos dos fatores no score composto
-const FACTOR_WEIGHTS: Record<string, number> = {
+// Pesos dos fatores padrão (fallback)
+const DEFAULT_FACTOR_WEIGHTS: Record<string, number> = {
   valor: 0.30,       // Valuation (30%)
   qualidade: 0.30,   // Qualidade + Saúde Financeira (30%)
   momentum: 0.15,    // Momentum Técnico (15%)
@@ -85,16 +85,19 @@ export function calcPercentile(value: number, population: number[]): number {
 
 /**
  * Calcula percentis e scores fatoriais para um ativo vs seus peers
+ * @param factorWeights pesos dos fatores (opcional, usa defaults se não fornecido)
  */
 export function calcSectorPercentiles(
   ticker: string,
   indicators: Record<string, number | null>,
-  peers: Array<{ ticker: string; indicators: Record<string, number | null> }>
+  peers: Array<{ ticker: string; indicators: Record<string, number | null> }>,
+  factorWeights?: Record<string, number>
 ): {
   percentiles: Record<string, number>;
   factors: Record<string, number>;
   composite: number;
 } {
+  const weights = factorWeights ?? DEFAULT_FACTOR_WEIGHTS;
   const allTickers = [{ ticker, indicators }, ...peers];
   const percentiles: Record<string, number> = {};
 
@@ -128,7 +131,7 @@ export function calcSectorPercentiles(
 
   // Score composto (ponderado)
   let composite = 0;
-  for (const [factor, weight] of Object.entries(FACTOR_WEIGHTS)) {
+  for (const [factor, weight] of Object.entries(weights)) {
     composite += (factors[factor] ?? 50) * weight;
   }
 

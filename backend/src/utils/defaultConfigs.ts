@@ -1,4 +1,4 @@
-import type { InvestorProfile, IndicatorConfigInput, ScoreThresholdInput } from "../types";
+import type { InvestorProfile, IndicatorConfigInput, ScoreThresholdInput, SectorFactorWeightInput } from "../types";
 
 export const DEFAULT_INDICATORS: Record<InvestorProfile, IndicatorConfigInput[]> = {
   GENERICO: [
@@ -89,5 +89,32 @@ export const DEFAULT_THRESHOLDS: Record<InvestorProfile, ScoreThresholdInput[]> 
     { minScore: 35, decision: "MANTER",       emoji: "⏸️", desc: "Momentum enfraquecendo — aguardar novo sinal" },
     { minScore: 20, decision: "VENDA",        emoji: "⚠️", desc: "Perda de momentum — reduzir posição" },
     { minScore:  0, decision: "VENDA_FORTE",  emoji: "🔴", desc: "Tendência negativa confirmada — sair imediatamente" },
+  ],
+};
+
+export const DEFAULT_SECTOR_FACTOR_WEIGHTS: Record<InvestorProfile, SectorFactorWeightInput[]> = {
+  GENERICO: [
+    { factor: "valor",       weight: 0.30 },
+    { factor: "qualidade",   weight: 0.30 },
+    { factor: "momentum",    weight: 0.15 },
+    { factor: "crescimento", weight: 0.25 },
+  ],
+  CONSERVADOR: [
+    { factor: "valor",       weight: 0.35 },
+    { factor: "qualidade",   weight: 0.40 },
+    { factor: "momentum",    weight: 0.05 },
+    { factor: "crescimento", weight: 0.20 },
+  ],
+  MODERADO: [
+    { factor: "valor",       weight: 0.30 },
+    { factor: "qualidade",   weight: 0.30 },
+    { factor: "momentum",    weight: 0.15 },
+    { factor: "crescimento", weight: 0.25 },
+  ],
+  AGRESSIVO: [
+    { factor: "valor",       weight: 0.20 },
+    { factor: "qualidade",   weight: 0.25 },
+    { factor: "momentum",    weight: 0.25 },
+    { factor: "crescimento", weight: 0.30 },
   ],
 };

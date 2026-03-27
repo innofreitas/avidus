@@ -115,3 +115,15 @@ model StockSectorPercentile {
   @@unique([ticker, date])
   @@map("stock_sector_percentiles")
 }
+
+model SectorFactorWeight {
+  id        String          @id @default(uuid())
+  profile   InvestorProfile
+  factor    String          // "valor" | "qualidade" | "momentum" | "crescimento"
+  weight    Float           // 0.0 – 1.0 (ex: 0.30 = 30%)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([profile, factor])
+  @@map("sector_factor_weights")
+}

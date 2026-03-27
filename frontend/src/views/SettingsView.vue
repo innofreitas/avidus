@@ -28,15 +28,23 @@ const profile = computed(() => store.profiles.find((p) => p.profile === active.v
 // Cópias locais editáveis
 const localInds  = ref<any[]>([]);
 const localThrs  = ref<any[]>([]);
+const localFactors = ref<any[]>([]);
 
 watch(profile, (p) => {
   if (!p) return;
   localInds.value = p.indicators.map((i) => ({ ...i }));
   localThrs.value = [...p.thresholds].sort((a, b) => b.minScore - a.minScore).map((t) => ({ ...t }));
+  localFactors.value = [...(p.sectorFactorWeights ?? [])].sort((a, b) => {
+    const order = ["valor", "qualidade", "momentum", "crescimento"];
+    return order.indexOf(a.factor) - order.indexOf(b.factor);
+  }).map((f) => ({ ...f }));
 }, { immediate: true });
 
 const totalWeight = computed(() => localInds.value.reduce((s, i) => s + Number(i.weight), 0));
 const weightOk    = computed(() => totalWeight.value <= 100.01);
+
+const totalWeightFactors = computed(() => localFactors.value.reduce((s, f) => s + Number(f.weight), 0));
+const weightFactorsOk    = computed(() => Math.abs(totalWeightFactors.value - 1.0) <= 0.01);
 
 function feedback(ok: boolean, err?: string) {
   saveOk.value  = ok;
@@ -59,6 +67,16 @@ async function saveThresholds() {
   saving.value = true;
   try {
     await store.updateThresholds(active.value, localThrs.value);
+    feedback(true);
+  } catch (e: any) { feedback(false, e.message); }
+  finally { saving.value = false; }
+}
+
+async function saveSectorFactorWeights() {
+  if (!profile.value || !weightFactorsOk.value) return;
+  saving.value = true;
+  try {
+    await store.updateSectorFactorWeights(active.value, localFactors.value);
     feedback(true);
   } catch (e: any) { feedback(false, e.message); }
   finally { saving.value = false; }
@@ -207,6 +225,41 @@ async function doResetAll() {
         <div class="mt-4 flex justify-end">
           <button @click="saveThresholds" :disabled="saving" class="btn-primary text-sm">
             {{ saving ? "Salvando..." : "Salvar Thresholds" }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Sector Factor Weights -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold">📊 Pesos Fatoriais</h2>
+          <span :class="['text-sm font-mono px-2 py-0.5 rounded', weightFactorsOk ? 'text-green-600 bg-green-50 dark:bg-green-950' : 'text-red-600 bg-red-50 dark:bg-red-950']">
+            {{ (totalWeightFactors * 100).toFixed(1) }}%
+          </span>
+        </div>
+
+        <p class="text-xs text-gray-500 mb-4">Ponderação dos 4 fatores na comparação setorial.</p>
+
+        <p v-if="!weightFactorsOk" class="text-red-500 text-xs mb-3">⚠️ Soma deve ser 100% (±1%)</p>
+
+        <div class="space-y-3 max-h-72 overflow-y-auto pr-1">
+          <div v-for="fac in localFactors" :key="fac.factor" class="flex items-center gap-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400 w-36 truncate flex-shrink-0 capitalize">
+              {{ fac.factor }}
+            </span>
+            <input type="range" min="0" max="100" step="1"
+              :value="fac.weight * 100" @input="(e) => fac.weight = (e.target as HTMLInputElement).valueAsNumber / 100"
+              class="flex-1 h-2 accent-indigo-600" />
+            <input type="number" min="0" max="100" step="1"
+              :value="Math.round(fac.weight * 100)" @input="(e) => fac.weight = (e.target as HTMLInputElement).valueAsNumber / 100"
+              class="input w-16 text-sm text-center py-1 px-2" />
+            <span class="text-xs text-gray-400">%</span>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <button @click="saveSectorFactorWeights" :disabled="saving || !weightFactorsOk" class="btn-primary text-sm">
+            {{ saving ? "Salvando..." : "Salvar Pesos" }}
           </button>
         </div>
       </div>

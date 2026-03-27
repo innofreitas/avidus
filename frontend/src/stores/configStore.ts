@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import api from "@/utils/api";
-import type { ProfileConfig, ProfileName, IndicatorConfig, ScoreThreshold } from "@/types";
+import type { ProfileConfig, ProfileName, IndicatorConfig, ScoreThreshold, SectorFactorWeight } from "@/types";
 
 export const useConfigStore = defineStore("config", () => {
   const profiles = ref<ProfileConfig[]>([]);
@@ -67,5 +67,16 @@ export const useConfigStore = defineStore("config", () => {
     finally { saving.value = false; }
   }
 
-  return { profiles, loading, saving, error, getProfile, fetchAll, updateIndicators, updateThresholds, resetProfile, resetAll };
+  async function updateSectorFactorWeights(profile: ProfileName, weights: Partial<SectorFactorWeight>[]) {
+    saving.value = true;
+    error.value  = null;
+    try {
+      const res = await api.put<{ success: boolean; data: ProfileConfig }>(`/config/profiles/${profile}/sector-factor-weights`, { weights });
+      const idx = profiles.value.findIndex((p) => p.profile === profile);
+      if (idx >= 0 && res.data.data) profiles.value[idx] = res.data.data;
+    } catch (e: any) { error.value = e.message; throw e; }
+    finally { saving.value = false; }
+  }
+
+  return { profiles, loading, saving, error, getProfile, fetchAll, updateIndicators, updateThresholds, updateSectorFactorWeights, resetProfile, resetAll };
 });

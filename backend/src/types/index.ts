@@ -37,10 +37,23 @@ export interface ScoreThresholdRow extends ScoreThresholdInput {
   updatedAt: Date;
 }
 
+export interface SectorFactorWeightInput {
+  factor: string;
+  weight: number;
+}
+
+export interface SectorFactorWeightRow extends SectorFactorWeightInput {
+  id:        string;
+  profile:   InvestorProfile;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface ProfileConfig {
-  profile:    InvestorProfile;
-  indicators: IndicatorConfigRow[];
-  thresholds: ScoreThresholdRow[];
+  profile:              InvestorProfile;
+  indicators:           IndicatorConfigRow[];
+  thresholds:           ScoreThresholdRow[];
+  sectorFactorWeights:  SectorFactorWeightRow[];
 }
 
 export interface ScoreDetail {

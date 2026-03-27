@@ -67,10 +67,18 @@ export interface ScoreThreshold {
   desc:     string;
 }
 
+export interface SectorFactorWeight {
+  id:      string;
+  profile: ProfileName;
+  factor:  string;
+  weight:  number;
+}
+
 export interface ProfileConfig {
-  profile:    ProfileName;
-  indicators: IndicatorConfig[];
-  thresholds: ScoreThreshold[];
+  profile:              ProfileName;
+  indicators:           IndicatorConfig[];
+  thresholds:           ScoreThreshold[];
+  sectorFactorWeights:  SectorFactorWeight[];
 }
 
 // ─── Resultado de análise ─────────────────────────────────────

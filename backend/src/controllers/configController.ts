@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getAllProfileConfigs, getProfileConfig, updateProfileIndicators, updateProfileThresholds, resetProfileConfigs } from "../models/configModel";
+import { getAllProfileConfigs, getProfileConfig, updateProfileIndicators, updateProfileThresholds, updateSectorFactorWeights, resetProfileConfigs } from "../models/configModel";
 import { ALL_PROFILES } from "../types";
 import type { InvestorProfile } from "../types";
 
@@ -51,4 +51,14 @@ export async function resetProfile(req: Request, res: Response): Promise<void> {
   await resetProfileConfigs(name);
   const data = await getProfileConfig(name);
   res.json({ success: true, data, message: `Perfil ${name} resetado` });
+}
+
+export async function updateSectorFactorWeightsHandler(req: Request, res: Response): Promise<void> {
+  const name = req.params.name.toUpperCase();
+  if (!validProfile(name)) { res.status(404).json({ success: false, error: { message: `Perfil '${name}' não encontrado` } }); return; }
+  const { weights } = req.body;
+  if (!Array.isArray(weights) || !weights.length) { res.status(400).json({ success: false, error: { message: '"weights" deve ser um array não vazio' } }); return; }
+  await updateSectorFactorWeights(name, weights);
+  const data = await getProfileConfig(name);
+  res.json({ success: true, data, message: "Pesos fatoriais atualizados" });
 }

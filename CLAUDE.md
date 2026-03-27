@@ -18,6 +18,12 @@ exibe tudo num dashboard Vue 3.
 - Portfólio — upload de planilha `.xlsx` exportada da B3, análise em lote
 - Análise Barsi — metodologia BEST (Bancos, Energia, Saneamento, Telecom, Seguridade)
 - Análise Buffett — metodologia Moat (score fundamentalista ponderado por 7 critérios)
+- **Comparação Setorial** — percentis de cada ativo vs peers setoriais + 4 fatores (Valor, Qualidade,
+  Momentum, Crescimento) com scoring composto; integrada no PortfolioView via botão "Comparar Setor"
+  - Cálculo: todos os tickers do portfólio comparados contra seus peers setoriais
+  - Resultado: tabela por setor com ranking, percentis de 11 indicadores, scores fatoriais
+  - Cache automático em `stockSectorPercentile` (reutiliza em subsequentes queries)
+  - UI: lista expansível com insights (análise Moat e Risk) colapsáveis, badges coloridas
 - Scraping de validação — compara indicadores do Yahoo com Investidor10, Fundamentus e
   StatusInvest; reconcilia discrepâncias pela média das fontes
 - Preço justo — Graham (√22.5 × LPA × VPA) e Bazin (trailingAnnualDividendRate / 0.06)
@@ -36,20 +42,24 @@ avidus2/
 │   │   ├── config/
 │   │   │   └── database.ts          # Prisma singleton — exporta `prisma`
 │   │   ├── controllers/
-│   │   │   ├── stockController.ts   # GET /api/stock/analyze/:ticker
-│   │   │   │                        # GET /api/stock/cache (listCacheHandler)
-│   │   │   │                        # DELETE /api/stock/cache/:ticker
-│   │   │   └── configController.ts  # CRUD perfis e thresholds
+│   │   │   ├── stockController.ts        # GET /api/stock/analyze/:ticker
+│   │   │   │                             # GET /api/stock/cache (listCacheHandler)
+│   │   │   │                             # DELETE /api/stock/cache/:ticker
+│   │   │   ├── comparisonController.ts   # GET /api/comparison/tickers
+│   │   │   │                             # GET /api/comparison/sector/:sector
+│   │   │   │                             # GET /api/comparison/portfolio
+│   │   │   └── configController.ts       # CRUD perfis e thresholds
 │   │   ├── models/
 │   │   │   ├── stockModel.ts        # getCachedStockData / saveStockDataCache
 │   │   │   │                        # deleteStockCache / listCacheEntries
 │   │   │   └── configModel.ts       # getProfile / updateIndicators / updateThresholds
 │   │   ├── routes/index.ts          # monta /api/stock/* e /api/config/*
 │   │   ├── services/
-│   │   │   ├── yahooService.ts      # fonte principal — Yahoo Finance v3
-│   │   │   ├── brapiService.ts      # fonte alternativa — brapi.dev
-│   │   │   ├── analysisService.ts   # motor de análise + scoring
-│   │   │   └── scraperService.ts    # scraping Investidor10/Fundamentus/StatusInvest
+│   │   │   ├── yahooService.ts          # fonte principal — Yahoo Finance v3
+│   │   │   ├── brapiService.ts          # fonte alternativa — brapi.dev
+│   │   │   ├── analysisService.ts       # motor de análise + scoring
+│   │   │   ├── percentileService.ts     # cálculo de percentis setoriais + fatores
+│   │   │   └── scraperService.ts        # scraping Investidor10/Fundamentus/StatusInvest
 │   │   ├── types/index.ts           # InvestorProfile, DecisionType, ScoreResult, etc.
 │   │   ├── utils/defaultConfigs.ts  # seed de indicadores e thresholds por perfil
 │   │   └── server.ts
@@ -61,9 +71,10 @@ avidus2/
     └── src/
         ├── components/
         │   ├── analysis/
-        │   │   ├── AnalysisDetail.vue   # componente reutilizável — análise completa
-        │   │   ├── AnalysisBarsi.vue    # modal BEST — 4 abas
-        │   │   ├── AnalysisBuffett.vue  # modal Moat — 4 abas
+        │   │   ├── AnalysisDetail.vue       # componente reutilizável — análise completa
+        │   │   ├── AnalysisBarsi.vue        # modal BEST — 4 abas
+        │   │   ├── AnalysisBuffett.vue      # modal Moat — 4 abas
+        │   │   ├── SectorComparisonModal.vue # modal comparação setorial — abas por setor
         │   │   └── ScoreGauge.vue
         │   ├── charts/
         │   │   ├── RecommendationChart.vue
@@ -102,6 +113,8 @@ avidus2/
 | `ScoreThreshold` | `score_thresholds` | Limiares de decisão por perfil (COMPRA_FORTE ≥ X) |
 | `StockDataCache` | `stock_data_cache` | rawData JSON por ticker+date (cache diário) |
 | `StockAnalysis` | `stock_analyses` | Histórico de análises (modelo existe, sem UI ainda) |
+| `StockSectorPercentile` | `stock_sector_percentiles` | Percentis setoriais + scores fatoriais por ticker+date |
+| `Stock` | `stocks` | Catálogo de tickers com setor (carregado via brapi) |
 
 ### Enums
 ```
@@ -164,13 +177,18 @@ GET    /api/stock/analyze/:ticker
 GET    /api/stock/cache                   # lista todos os registros (query: ?ticker=PETR4)
 DELETE /api/stock/cache/:ticker           # remove cache do ticker
 
+# Comparação Setorial
+GET    /api/comparison/tickers            # ?tickers=PETR4,VALE3,... (ad-hoc)
+GET    /api/comparison/sector/:sector     # todos os tickers do setor (requer cache)
+GET    /api/comparison/portfolio          # ?tickers=PETR4,... (portfólio vs peers, agrupa por setor)
+
 # Configuração de perfis
 GET    /api/config/profiles
 GET    /api/config/profiles/:name
 PUT    /api/config/profiles/:name/indicators
 PUT    /api/config/profiles/:name/thresholds
-POST   /api/config/reset              # reset todos os perfis
-POST   /api/config/reset/:name        # reset perfil específico
+POST   /api/config/reset                  # reset todos os perfis
+POST   /api/config/reset/:name            # reset perfil específico
 ```
 
 ---
@@ -301,6 +319,28 @@ const pesoAdj = d.peso * (pesoTotal / pesoEfetivo);
 // BRAPI_TOKEN opcional (sem token: rate-limit nos 4 tickers gratuitos)
 ```
 
+### 6.12 Comparação Setorial — 4 fatores ponderados
+```typescript
+// percentileService.ts exporta:
+// - extractIndicators(rawData) — extrai 11 indicadores de value/quality/momentum/growth
+// - calcSectorPercentiles(ticker, indicators, peers) — retorna percentis + factors + composite
+//
+// Indicadores extraídos (11 no total):
+//   Valor (menor ↓): pl, pvp, evEbit
+//   Qualidade (maior ↑): roe, margemLiquida, roa, dividaEbitda
+//   Momentum (maior ↑): rsi14, macd
+//   Crescimento (maior ↑): earningsGrowth, dividendYield, payoutRatio
+//
+// Ponderação de fatores:
+//   Valor: 30%, Qualidade: 30%, Momentum: 15%, Crescimento: 25%
+//   Composite = Σ(factor_score × weight) → range 0-100
+//
+// Cache automático: comparePortfolioHandler() salva em stockSectorPercentile
+//   - Verifica se (ticker, date) já existe
+//   - Se não: calcula + upsert automático (Prisma idempotency)
+//   - Evita recálculos em subsequentes requisições do mesmo dia
+```
+
 ---
 
 ## 7. Scrapers — Estrutura HTML Validada
@@ -360,6 +400,7 @@ Tabela Ações:
   - Coluna Recomendação (4 perfis + analistas)
   - Coluna Pontuação = somatório dos 4 scores (sort clicável)
   - Botão "Analisar Todos" → chama GET /api/stock/analyze/:ticker sequencialmente
+  - Botão "📊 Comparar Setor" → abre SectorComparisonModal.vue (compara cada ativo vs peers setoriais)
   - Botão "🎯 Análise Barsi" → abre AnalysisBarsi.vue
   - Botão "🏛️ Análise Buffett" → abre AnalysisBuffett.vue
 ```
@@ -507,6 +548,20 @@ node testScraper.mjs PETR4 --fonte=investidor10
   - Botão 🗑️ deleta o cache do ticker via DELETE /api/stock/cache/:ticker
   - Estado de expansão via `ref<string|null>` (não Set — reativo no Vue 3)
   - JSON exibido via `<pre>{{ fmtJson(data) }}</pre>` (sem v-html)
+- [x] **Comparação Setorial integrada no PortfolioView**
+  - Backend: `percentileService.ts` com extractIndicators + calcSectorPercentiles
+  - Endpoints: `/api/comparison/tickers`, `/api/comparison/sector/:sector`, `/api/comparison/portfolio`
+  - Cálculo: 11 indicadores × 4 fatores (Valor 30%, Qualidade 30%, Momentum 15%, Crescimento 25%)
+  - Database caching: stockSectorPercentile com chave composta (ticker, date)
+  - Reutilização automática de resultados no mesmo dia (Prisma upsert)
+  - Frontend: Modal `SectorComparisonModal.vue` com:
+    - Abas por setor (agrupamento automático)
+    - Lista expandível: ranking do setor, badges "Do Portfólio", score colorido
+    - Insights colapsáveis: análise Moat (7 critérios) + análise Risk (Liquidez, Beta, Dívida)
+    - Legenda de percentis com badges coloridas (Verde ≥67%, Amarelo ≥34%, Vermelho <34%)
+    - Tabela detalhada: Ticker, Do Portfólio, Valor, Qualidade, Momentum, Crescimento, Score
+    - Data formatada no cabeçalho da modal (formatDate utility)
+  - Removida rota deprecated `/comparison` e vista `ComparisonView.vue`
 
 ---
 
@@ -522,9 +577,9 @@ node testScraper.mjs PETR4 --fonte=investidor10
 - [ ] **SettingsView** — verificar se o CRUD de pesos e thresholds está 100% funcional
   (PUT /api/config/profiles/:name/indicators e /thresholds)
 - [ ] **Testes** — nenhum teste automatizado ainda; considerar vitest para analysisService
-  (funções puras — fácil de testar)
-- [ ] **Verificar botão Buffett no PortfolioView** — componente AnalysisBuffett.vue
-  existe; confirmar se o botão está renderizando corretamente na tabela de ações
+  e percentileService (funções puras — fácil de testar)
+- [ ] **Exportação de dados da comparação setorial** — adicionar botão para baixar CSV/Excel
+  com resultados da comparação (percentis + scores por setor)
 
 ---
 
@@ -605,3 +660,53 @@ consegue provar que `Record<string, unknown>` é compatível:
 create: { ticker, date, rawData: rawData as any },
 update: { rawData: rawData as any },
 ```
+
+### Comparação Setorial — caminhos de indicadores no rawData
+Os indicadores são extraídos de caminhos específicos no rawData:
+```typescript
+// No fundamentalService, os indicadores são organizados assim:
+rawData.fundamental.valuation.trailingPE          (P/L)
+rawData.fundamental.valuation.priceToBook         (P/VP)
+rawData.fundamental.valuation.evEbit              (EV/EBIT)
+rawData.fundamental.rentabilidade.returnOnEquity  (ROE)
+rawData.fundamental.rentabilidade.profitMargins   (Margem Líquida)
+rawData.fundamental.rentabilidade.returnOnAssets  (ROA)
+rawData.fundamental.divida.dividaEbitda           (Dívida/EBITDA)
+rawData.technical.rsi14                           (RSI 14)
+rawData.technical.macd                            (MACD)
+rawData.fundamental.crescimento.earningsGrowthYoY (Growth)
+rawData.fundamental.dividendos.dividendYield      (DY)
+rawData.fundamental.dividendos.payoutRatio        (Payout)
+//
+// Importante: estes caminhos devem estar 100% sincronizados com buildFundamental()
+// em yahooService.ts. Se alterar a estrutura lá, atualizar extractIndicators() também.
+```
+
+### SectorComparisonModal — reatividade com Set
+A modal usa `ref<Set<string>>` para rastrear itens com insights expandidos:
+```typescript
+const expandedInsights = ref<Set<string>>(new Set());
+
+function toggleInsightExpanded(ticker: string) {
+  if (expandedInsights.value.has(ticker)) {
+    expandedInsights.value.delete(ticker);
+  } else {
+    expandedInsights.value.add(ticker);
+  }
+  // ✅ CRUCIAL: reatribuir o Set para Vue detectar mudança
+  expandedInsights.value = new Set(expandedInsights.value);
+}
+```
+Sem a reatribuição, o Vue não dispara re-render — `Set` é mutável mas não é reativo por si.
+
+### Badge de score — cor dinâmica via função
+O score composto (0-100) é exibido com cor dinâmica:
+```typescript
+function getScoreColor(score: number): string {
+  if (score >= 70) return "#059669";      // Emerald (excelente)
+  if (score >= 50) return "#3b82f6";      // Blue (bom)
+  if (score >= 30) return "#f59e0b";      // Amber (moderado)
+  return "#ef4444";                       // Red (fraco)
+}
+```
+Utilizadas no `<div :style="{ color: getScoreColor(...) }}">`.
