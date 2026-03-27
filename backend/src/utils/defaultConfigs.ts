@@ -12,7 +12,7 @@ export const DEFAULT_INDICATORS: Record<InvestorProfile, IndicatorConfigInput[]>
   CONSERVADOR: [
     { indicatorId: "pl",             category: "FUNDAMENTALISTA", weight: 12, idealRange: "6–12"    },
     { indicatorId: "pvp",            category: "FUNDAMENTALISTA", weight:  8, idealRange: "0.8–1.8" },
-    { indicatorId: "roe",            category: "FUNDAMENTALISTA", weight: 12, idealRange: "15–25%"  },
+    { indicatorId: "roe",            category: "FUNDAMENTALISTA", weight: 13, idealRange: "15–25%"  },
     { indicatorId: "margemLiquida",  category: "FUNDAMENTALISTA", weight:  8, idealRange: "10–25%"  },
     { indicatorId: "dividaEbitda",   category: "FUNDAMENTALISTA", weight:  8, idealRange: "0–0.6x"  },
     { indicatorId: "earningsGrowth", category: "FUNDAMENTALISTA", weight:  8, idealRange: "6–12%"   },
@@ -50,7 +50,7 @@ export const DEFAULT_INDICATORS: Record<InvestorProfile, IndicatorConfigInput[]>
     { indicatorId: "dividaEbitda",   category: "FUNDAMENTALISTA", weight:  4, idealRange: "0–2.0x"  },
     { indicatorId: "earningsGrowth", category: "FUNDAMENTALISTA", weight: 13, idealRange: "12–30%"  },
     { indicatorId: "dividendYield",  category: "FUNDAMENTALISTA", weight:  3, idealRange: "0–5%"    },
-    { indicatorId: "rsi",            category: "TECNICO",         weight: 10, idealRange: "30–70"   },
+    { indicatorId: "rsi",            category: "TECNICO",         weight: 11, idealRange: "30–70"   },
     { indicatorId: "precoVsMMs",     category: "TECNICO",         weight:  9, idealRange: "≥MM20"   },
     { indicatorId: "macd",           category: "TECNICO",         weight:  7, idealRange: "Qualquer" },
     { indicatorId: "tendencia",      category: "TECNICO",         weight:  9, idealRange: "Alta/Explosiva" },
