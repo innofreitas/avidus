@@ -26,9 +26,11 @@ interface SectorResults {
 
 interface ApiResponse {
   success: boolean;
-  data: SectorResults;
-  sectorCount: number;
+  data: SectorResults | ComparisonResult[];
+  sectorCount?: number;
+  count?: number;
   date: string;
+  error?: { message: string };
 }
 
 const props = defineProps<{
@@ -48,6 +50,7 @@ const error = ref<string | null>(null);
 const results = ref<SectorResults>({});
 const activeTab = ref<string>("");
 const date = ref("");
+const activeContent = ref<"comparacao" | "insights">("comparacao");
 
 // Abas calculadas
 const sectors = computed(() => {
@@ -326,136 +329,166 @@ onMounted(() => {
 
         <!-- Abas -->
         <div v-else class="space-y-6 p-6">
-          <!-- Tab buttons -->
-          <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-800 pb-4">
+          <!-- Tab Control: Comparação / Insights -->
+          <div class="flex gap-2 border-b border-gray-200 dark:border-gray-800 pb-4">
             <button
-              v-for="sector in sectors"
-              :key="sector"
-              @click="activeTab = sector"
+              @click="activeContent = 'comparacao'"
               :class="[
-                'px-4 py-2 rounded-lg font-medium transition-colors text-sm',
-                activeTab === sector
+                'px-6 py-2 rounded-lg font-medium transition-colors text-sm',
+                activeContent === 'comparacao'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
               ]"
             >
-              {{ sector }} ({{ results[sector]?.length ?? 0 }})
+              📊 Comparação
+            </button>
+            <button
+              @click="activeContent = 'insights'"
+              :class="[
+                'px-6 py-2 rounded-lg font-medium transition-colors text-sm',
+                activeContent === 'insights'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              ]"
+            >
+              💡 Insights
             </button>
           </div>
 
-          <!-- Tabela de Scores por Fator -->
-          <div class="space-y-3">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Score por Fator</h2>
-            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table class="w-full text-sm">
-                <thead class="bg-gray-50 dark:bg-gray-800">
-                  <tr class="text-left text-gray-600 dark:text-gray-300">
-                    <th class="px-4 py-3 font-semibold">Ticker</th>
-                    <th class="px-4 py-3 font-semibold text-center">Do Portfólio</th>
-                    <th class="px-4 py-3 font-semibold text-right">Valor</th>
-                    <th class="px-4 py-3 font-semibold text-right">Qualidade</th>
-                    <th class="px-4 py-3 font-semibold text-right">Momentum</th>
-                    <th class="px-4 py-3 font-semibold text-right">Crescimento</th>
-                    <th class="px-4 py-3 font-semibold text-right">Score</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                  <tr v-for="row in currentSectorResults" :key="row.ticker" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-                    <!-- Ticker -->
-                    <td class="px-4 py-3">
-                      <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                        {{ row.ticker }}
-                      </span>
-                    </td>
+          <!-- ABA: COMPARAÇÃO -->
+          <div v-if="activeContent === 'comparacao'" class="space-y-6">
+            <!-- Tab buttons para setores -->
+            <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-800 pb-4">
+              <button
+                v-for="sector in sectors"
+                :key="sector"
+                @click="activeTab = sector"
+                :class="[
+                  'px-4 py-2 rounded-lg font-medium transition-colors text-sm',
+                  activeTab === sector
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                ]"
+              >
+                {{ sector }} ({{ results[sector]?.length ?? 0 }})
+              </button>
+            </div>
 
-                    <!-- Do Portfólio -->
-                    <td class="px-4 py-3 text-center">
-                      <span v-if="row.fromPortfolio" class="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
-                        ✓
-                      </span>
-                    </td>
-
-                    <!-- Fatores -->
-                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                      {{ formatScore(row.factors.valor) }}
-                    </td>
-                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                      {{ formatScore(row.factors.qualidade) }}
-                    </td>
-                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                      {{ formatScore(row.factors.momentum) }}
-                    </td>
-                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                      {{ formatScore(row.factors.crescimento) }}
-                    </td>
-
-                    <!-- Score Composto + Barra -->
-                    <td class="px-4 py-3">
-                      <div class="flex items-center gap-2">
-                        <div class="flex-1">
-                          <div class="w-16 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                            <div
-                              class="h-2 rounded-full transition-all"
-                              :style="{
-                                width: Math.min(row.composite, 100) + '%',
-                                backgroundColor: getScoreColor(row.composite)
-                              }"
-                            />
-                          </div>
-                        </div>
-                        <span class="w-10 text-right font-semibold" :style="{ color: getScoreColor(row.composite) }">
-                          {{ formatScore(row.composite) }}
+            <!-- Tabela de Scores por Fator -->
+            <div class="space-y-3">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Score por Fator</h2>
+              <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 dark:bg-gray-800">
+                    <tr class="text-left text-gray-600 dark:text-gray-300">
+                      <th class="px-4 py-3 font-semibold">Ticker</th>
+                      <th class="px-4 py-3 font-semibold text-center">Do Portfólio</th>
+                      <th class="px-4 py-3 font-semibold text-right">Valor</th>
+                      <th class="px-4 py-3 font-semibold text-right">Qualidade</th>
+                      <th class="px-4 py-3 font-semibold text-right">Momentum</th>
+                      <th class="px-4 py-3 font-semibold text-right">Crescimento</th>
+                      <th class="px-4 py-3 font-semibold text-right">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tr v-for="row in currentSectorResults" :key="row.ticker" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                      <!-- Ticker -->
+                      <td class="px-4 py-3">
+                        <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                          {{ row.ticker }}
                         </span>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      </td>
+
+                      <!-- Do Portfólio -->
+                      <td class="px-4 py-3 text-center">
+                        <span v-if="row.fromPortfolio" class="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          ✓
+                        </span>
+                      </td>
+
+                      <!-- Fatores -->
+                      <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                        {{ formatScore(row.factors.valor) }}
+                      </td>
+                      <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                        {{ formatScore(row.factors.qualidade) }}
+                      </td>
+                      <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                        {{ formatScore(row.factors.momentum) }}
+                      </td>
+                      <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                        {{ formatScore(row.factors.crescimento) }}
+                      </td>
+
+                      <!-- Score Composto + Barra -->
+                      <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                          <div class="flex-1">
+                            <div class="w-16 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+                              <div
+                                class="h-2 rounded-full transition-all"
+                                :style="{
+                                  width: Math.min(row.composite, 100) + '%',
+                                  backgroundColor: getScoreColor(row.composite)
+                                }"
+                              />
+                            </div>
+                          </div>
+                          <span class="w-10 text-right font-semibold" :style="{ color: getScoreColor(row.composite) }">
+                            {{ formatScore(row.composite) }}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Heatmap de Indicadores -->
+            <div class="space-y-3">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Percentis de Indicadores</h2>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Verde: melhor que 67% | Amarelo: melhor que 34% | Vermelho: abaixo de 34%</p>
+
+              <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 dark:bg-gray-800">
+                    <tr class="text-left text-gray-600 dark:text-gray-300">
+                      <th class="px-4 py-3 font-semibold sticky left-0 z-10 bg-gray-50 dark:bg-gray-800">
+                        Ticker
+                      </th>
+                      <th v-for="ind in INDICATORS_DISPLAY" :key="ind.key" class="px-3 py-3 font-semibold text-center">
+                        {{ ind.label }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tr v-for="row in currentSectorResults" :key="row.ticker" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                      <!-- Ticker -->
+                      <td class="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                        <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                          {{ row.ticker }}
+                        </span>
+                      </td>
+
+                      <!-- Percentis -->
+                      <td
+                        v-for="ind in INDICATORS_DISPLAY"
+                        :key="ind.key"
+                        :class="['px-3 py-3 text-center font-semibold text-xs rounded', getPercentileClass(row.percentiles[ind.key])]"
+                      >
+                        {{ row.percentiles[ind.key] != null ? Math.round(row.percentiles[ind.key]) : "—" }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-
-          <!-- Heatmap de Indicadores -->
-          <div class="space-y-3">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Percentis de Indicadores</h2>
-            <p class="text-xs text-gray-500 dark:text-gray-400">Verde: melhor que 67% | Amarelo: melhor que 34% | Vermelho: abaixo de 34%</p>
-
-            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table class="w-full text-sm">
-                <thead class="bg-gray-50 dark:bg-gray-800">
-                  <tr class="text-left text-gray-600 dark:text-gray-300">
-                    <th class="px-4 py-3 font-semibold sticky left-0 z-10 bg-gray-50 dark:bg-gray-800">
-                      Ticker
-                    </th>
-                    <th v-for="ind in INDICATORS_DISPLAY" :key="ind.key" class="px-3 py-3 font-semibold text-center">
-                      {{ ind.label }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                  <tr v-for="row in currentSectorResults" :key="row.ticker" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-                    <!-- Ticker -->
-                    <td class="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/40">
-                      <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                        {{ row.ticker }}
-                      </span>
-                    </td>
-
-                    <!-- Percentis -->
-                    <td
-                      v-for="ind in INDICATORS_DISPLAY"
-                      :key="ind.key"
-                      :class="['px-3 py-3 text-center font-semibold text-xs rounded', getPercentileClass(row.percentiles[ind.key])]"
-                    >
-                      {{ row.percentiles[ind.key] != null ? Math.round(row.percentiles[ind.key]) : "—" }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
 
-          <!-- Aba de Insights -->
-          <div class="space-y-6">
+          <!-- ABA: INSIGHTS -->
+          <div v-if="activeContent === 'insights'" class="space-y-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">📊 Insights e Análise Qualitativa</h2>
 
             <!-- Líderes de Setor -->
