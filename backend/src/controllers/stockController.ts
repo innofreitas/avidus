@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getCachedStockData, saveStockDataCache, deleteStockCache, listCacheEntries } from "../models/stockModel";
+import { getCachedStockData, saveStockDataCache, deleteStockCache, listCacheEntries, listSectorPercentileEntries, deleteSectorPercentile } from "../models/stockModel";
 import { fetchAllData, isValidRawData } from "../services/yahooService";
 import { analyzeStock } from "../services/analysisService";
 
@@ -49,4 +49,17 @@ export async function listCacheHandler(req: Request, res: Response): Promise<voi
   const filter = (req.query.ticker as string | undefined)?.trim() ?? "";
   const rows   = await listCacheEntries(filter || undefined);
   res.json({ success: true, data: rows, total: rows.length });
+}
+
+export async function listSectorPercentileHandler(req: Request, res: Response): Promise<void> {
+  const filter = (req.query.ticker as string | undefined)?.trim() ?? "";
+  const rows   = await listSectorPercentileEntries(filter || undefined);
+  res.json({ success: true, data: rows, total: rows.length });
+}
+
+export async function deleteSectorPercentileHandler(req: Request, res: Response): Promise<void> {
+  const ticker = (req.params.ticker ?? "").trim().toUpperCase();
+  if (!ticker) { res.status(400).json({ success: false, error: { message: "Ticker obrigatório" } }); return; }
+  const count = await deleteSectorPercentile(ticker);
+  res.json({ success: true, message: `Percentis de ${ticker} removidos (${count} registros)` });
 }

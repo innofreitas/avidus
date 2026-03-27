@@ -3,7 +3,7 @@ import { Router } from "express";
 import { Router as ConfigRouter } from "express";
 import { Router as StockRouter } from "express";
 import { getAllProfiles, getProfile, updateIndicators, updateThresholds, updateSectorFactorWeightsHandler, resetAll, resetProfile } from "../controllers/configController";
-import { analyzeStockHandler, invalidateCacheHandler, listCacheHandler } from "../controllers/stockController";
+import { analyzeStockHandler, invalidateCacheHandler, listCacheHandler, listSectorPercentileHandler, deleteSectorPercentileHandler } from "../controllers/stockController";
 import { backtestHandler } from "../controllers/backtestController";
 import { listStocksHandler, loadStocksHandler, listSectorsHandler, createSectorHandler, updateSectorHandler, deleteSectorHandler, getStocksBySectorHandler } from "../controllers/stocksController";
 import { compareTickersHandler, compareSectorHandler, comparePortfolioHandler } from "../controllers/comparisonController";
@@ -18,9 +18,11 @@ configRouter.post("/reset",                             resetAll);
 configRouter.post("/reset/:name",                       resetProfile);
 
 const stockRouter = StockRouter();
-stockRouter.get("/cache",            listCacheHandler);
-stockRouter.get("/analyze/:ticker",  analyzeStockHandler);
-stockRouter.delete("/cache/:ticker", invalidateCacheHandler);
+stockRouter.get("/cache",                      listCacheHandler);
+stockRouter.get("/sector-percentiles",         listSectorPercentileHandler);
+stockRouter.get("/analyze/:ticker",            analyzeStockHandler);
+stockRouter.delete("/cache/:ticker",           invalidateCacheHandler);
+stockRouter.delete("/sector-percentiles/:ticker", deleteSectorPercentileHandler);
 
 const backtestRouter = Router();
 backtestRouter.post("/", backtestHandler);

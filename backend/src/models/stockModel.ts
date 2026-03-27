@@ -34,3 +34,31 @@ export async function listCacheEntries(filter?: string) {
     orderBy: [{ ticker: "asc" }, { date: "desc" }],
   });
 }
+
+export async function listSectorPercentileEntries(filter?: string) {
+  const where = filter
+    ? { ticker: { contains: filter.toUpperCase() } }
+    : undefined;
+  return (prisma as any).stockSectorPercentile.findMany({
+    where,
+    select: {
+      id: true,
+      ticker: true,
+      sector: true,
+      date: true,
+      percentiles: true,
+      factors: true,
+      composite: true,
+      createdAt: true,
+      updatedAt: true
+    },
+    orderBy: [{ ticker: "asc" }, { date: "desc" }],
+  });
+}
+
+export async function deleteSectorPercentile(ticker: string): Promise<number> {
+  const { count } = await (prisma as any).stockSectorPercentile.deleteMany({
+    where: { ticker: ticker.toUpperCase() }
+  });
+  return count;
+}
