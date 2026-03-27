@@ -5,7 +5,7 @@ import api from "@/utils/api";
 interface StockItem {
   ticker: string;
   name: string | null;
-  sector: string;
+  sector: string; 
 }
 
 const props = defineProps<{

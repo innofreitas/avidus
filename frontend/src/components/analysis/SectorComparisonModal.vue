@@ -51,15 +51,70 @@ const results = ref<SectorResults>({});
 const activeTab = ref<string>("");
 const date = ref("");
 const activeContent = ref<"comparacao" | "insights">("comparacao");
+const sortBy = ref<string | null>(null);
+const sortOrder = ref<"asc" | "desc">("desc");
 
 // Abas calculadas
 const sectors = computed(() => {
   const all = Object.keys(results.value).sort();
   return props.sectorFilter ? all.filter(s => s === props.sectorFilter) : all;
 });
-const currentSectorResults = computed(() =>
-  activeTab.value ? results.value[activeTab.value] : []
-);
+
+// Ordenação de tabelas
+const currentSectorResults = computed(() => {
+  const data = activeTab.value ? results.value[activeTab.value] : [];
+  if (!sortBy.value || data.length === 0) return data;
+
+  const sorted = [...data];
+  sorted.sort((a, b) => {
+    let aVal: any;
+    let bVal: any;
+
+    // Ordenar por diferentes campos
+    if (sortBy.value === "ticker") {
+      aVal = a.ticker;
+      bVal = b.ticker;
+    } else if (sortBy.value === "composite") {
+      aVal = a.composite;
+      bVal = b.composite;
+    } else if (sortBy.value?.startsWith("factor_")) {
+      const factor = sortBy.value.replace("factor_", "");
+      aVal = a.factors[factor] ?? 0;
+      bVal = b.factors[factor] ?? 0;
+    } else if (sortBy.value?.startsWith("percentile_")) {
+      const indicator = sortBy.value.replace("percentile_", "");
+      aVal = a.percentiles[indicator] ?? 0;
+      bVal = b.percentiles[indicator] ?? 0;
+    }
+
+    if (typeof aVal === "string") {
+      aVal = aVal.toLowerCase();
+      bVal = bVal.toLowerCase();
+    }
+
+    if (sortOrder.value === "asc") {
+      return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+    } else {
+      return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+    }
+  });
+
+  return sorted;
+});
+
+function toggleSort(column: string) {
+  if (sortBy.value === column) {
+    sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
+  } else {
+    sortBy.value = column;
+    sortOrder.value = "desc";
+  }
+}
+
+function getSortIcon(column: string): string {
+  if (sortBy.value !== column) return "↕";
+  return sortOrder.value === "asc" ? "↑" : "↓";
+}
 
 // Indicadores para exibição na heatmap
 const INDICATORS_DISPLAY = [
@@ -294,7 +349,7 @@ onMounted(() => {
                   bg-white dark:bg-gray-900 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            📊 {{ sectorFilter ? `Comparação: ${sectorFilter}` : "Comparação Setorial" }}
+            📊 Comparação Setorial{{ activeTab ? ` — ${activeTab}` : "" }}
           </h1>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {{ sectorFilter ? "Tickers do setor comparados entre si" : "Percentil Setorial + Score Fatorial" }} — {{ date }}
@@ -381,13 +436,25 @@ onMounted(() => {
                 <table class="w-full text-sm">
                   <thead class="bg-gray-50 dark:bg-gray-800">
                     <tr class="text-left text-gray-600 dark:text-gray-300">
-                      <th class="px-4 py-3 font-semibold">Ticker</th>
+                      <th class="px-4 py-3 font-semibold cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('ticker')">
+                        Ticker <span class="text-xs ml-1 opacity-70">{{ getSortIcon("ticker") }}</span>
+                      </th>
                       <th class="px-4 py-3 font-semibold text-center">Do Portfólio</th>
-                      <th class="px-4 py-3 font-semibold text-right">Valor</th>
-                      <th class="px-4 py-3 font-semibold text-right">Qualidade</th>
-                      <th class="px-4 py-3 font-semibold text-right">Momentum</th>
-                      <th class="px-4 py-3 font-semibold text-right">Crescimento</th>
-                      <th class="px-4 py-3 font-semibold text-right">Score</th>
+                      <th class="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('factor_valor')">
+                        Valor <span class="text-xs ml-1 opacity-70">{{ getSortIcon("factor_valor") }}</span>
+                      </th>
+                      <th class="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('factor_qualidade')">
+                        Qualidade <span class="text-xs ml-1 opacity-70">{{ getSortIcon("factor_qualidade") }}</span>
+                      </th>
+                      <th class="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('factor_momentum')">
+                        Momentum <span class="text-xs ml-1 opacity-70">{{ getSortIcon("factor_momentum") }}</span>
+                      </th>
+                      <th class="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('factor_crescimento')">
+                        Crescimento <span class="text-xs ml-1 opacity-70">{{ getSortIcon("factor_crescimento") }}</span>
+                      </th>
+                      <th class="px-4 py-3 font-semibold text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('composite')">
+                        Score <span class="text-xs ml-1 opacity-70">{{ getSortIcon("composite") }}</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -454,11 +521,11 @@ onMounted(() => {
                 <table class="w-full text-sm">
                   <thead class="bg-gray-50 dark:bg-gray-800">
                     <tr class="text-left text-gray-600 dark:text-gray-300">
-                      <th class="px-4 py-3 font-semibold sticky left-0 z-10 bg-gray-50 dark:bg-gray-800">
-                        Ticker
+                      <th class="px-4 py-3 font-semibold sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort('ticker')">
+                        Ticker <span class="text-xs opacity-70">{{ getSortIcon("ticker") }}</span>
                       </th>
-                      <th v-for="ind in INDICATORS_DISPLAY" :key="ind.key" class="px-3 py-3 font-semibold text-center">
-                        {{ ind.label }}
+                      <th v-for="ind in INDICATORS_DISPLAY" :key="ind.key" class="px-3 py-3 font-semibold text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition" @click="toggleSort(`percentile_${ind.key}`)">
+                        {{ ind.label }} <span class="text-xs opacity-70">{{ getSortIcon(`percentile_${ind.key}`) }}</span>
                       </th>
                     </tr>
                   </thead>
@@ -606,9 +673,7 @@ onMounted(() => {
               </ul>
             </div>
           </div>
-          </div>
         </div>
       </div>
     </div>
-  </div>
 </template>
