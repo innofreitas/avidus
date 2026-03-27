@@ -24,7 +24,7 @@ const error = ref<string | null>(null);
 const stocks = ref<StockItem[]>([]);
 const selected = ref<Set<string>>(new Set());
 const sectorPt = ref("");
-const saveAsFavorite = ref(false);
+const saveAsFavorite = ref(true);
 
 const MAX_SELECTION = 5;
 const canSelectMore = computed(() => selected.value.size < MAX_SELECTION);
