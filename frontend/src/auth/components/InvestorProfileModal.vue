@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useAuthStore, type InvestorProfileName } from "@/auth/stores/authStore";
 
 const emit = defineEmits<{ (e: "done"): void }>();
@@ -173,7 +173,9 @@ const QUESTIONS: Question[] = [
   },
   {
     id: 15, dimension: "Horizonte e Objetivos",
-    text: "Seu principal objetivo é:",
+    text: "Seus principais objetivos são:",
+    hint: "Selecione todos que se aplicam",
+    multiSelect: true,
     options: [
       { label: "Preservar capital",        points: 0 },
       { label: "Gerar renda",              points: 2 },
@@ -240,6 +242,40 @@ const currentMultiSet = computed(() =>
 const currentAnswered = computed(() => {
   if (currentQ.value.multiSelect) return currentMultiSet.value.size > 0;
   return currentAns.value !== null;
+});
+
+// ─── Auto-fill Q17 e Q18 a partir de Q1 ──────────────────────
+
+// Passos (0-based) que foram pré-preenchidos automaticamente
+const autoFilled = ref<Set<number>>(new Set());
+
+// Q1 = índice 0; Q17 = índice 16; Q18 = índice 17
+function autoQ17(): number {
+  const q1Indices = multiSelections.value[0] ?? new Set<number>();
+  const nonNone   = [...q1Indices].filter(i => i !== 0).length;
+  if (nonNone === 0) return 0;   // Não diversifico
+  if (nonNone === 1) return 2;   // Pouco
+  if (nonNone <= 3)  return 4;   // Diversificação moderada
+  return 5;                      // Forte diversificação
+}
+
+function autoQ18(): number {
+  const maxPts = answers.value[0] ?? 0;
+  if (maxPts <= 0) return 0;   // Poupança / Tesouro Selic
+  if (maxPts <= 1) return 2;   // Renda fixa
+  if (maxPts <= 3) return 4;   // Fundos / FIIs
+  return 5;                    // Ações / ETFs / Cripto
+}
+
+watch(currentStep, (step) => {
+  if (step === 16 && answers.value[16] === null) {
+    answers.value[16] = autoQ17();
+    autoFilled.value  = new Set([...autoFilled.value, 16]);
+  }
+  if (step === 17 && answers.value[17] === null) {
+    answers.value[17] = autoQ18();
+    autoFilled.value  = new Set([...autoFilled.value, 17]);
+  }
 });
 
 // ─── Lógica multi-select ──────────────────────────────────────
@@ -420,6 +456,15 @@ const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; d
             <p v-if="currentQ.hint" class="text-xs text-indigo-500 mt-1">
               ☑ {{ currentQ.hint }}
             </p>
+          </div>
+
+          <!-- Banner de auto-preenchimento -->
+          <div v-if="autoFilled.has(currentStep)"
+            class="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300
+                   bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800
+                   rounded-lg px-3 py-2">
+            <span>✨</span>
+            <span>Preenchido com base na sua resposta anterior — ajuste se necessário.</span>
           </div>
 
           <!-- ── Opções MULTI-SELECT (checkboxes) ── -->
