@@ -112,6 +112,30 @@ export const useAuthStore = defineStore("auth", () => {
 
   // ─── Salvar perfil de investidor ───────────────────────────
 
+  // ─── Atualizar dados da conta ──────────────────────────────
+
+  async function updateAccount(data: {
+    name?: string;
+    email?: string;
+    currentPassword?: string;
+    newPassword?: string;
+  }) {
+    loading.value = true;
+    error.value   = null;
+    try {
+      const res = await api.put<{ success: boolean; data: { user: AuthUser } }>("/auth/account", data);
+      user.value = res.data.data.user;
+      persist();
+    } catch (e: any) {
+      error.value = e?.message ?? "Erro ao atualizar conta";
+      throw e;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // ─── Salvar perfil de investidor ───────────────────────────
+
   async function saveInvestorProfile(
     profile: InvestorProfileName,
     method:  InvestorProfileChoice,
@@ -127,6 +151,6 @@ export const useAuthStore = defineStore("auth", () => {
   return {
     token, user, loading, error,
     isAuthenticated, isAdmin, userName, needsProfile,
-    login, register, logout, checkAuth, saveInvestorProfile,
+    login, register, logout, checkAuth, updateAccount, saveInvestorProfile,
   };
 });

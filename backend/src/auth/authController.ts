@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { login, register } from "./authService";
 import prisma from "../config/database";
+import bcrypt from "bcryptjs";
 
 // POST /api/auth/register
 export async function registerHandler(req: Request, res: Response) {
@@ -75,5 +76,42 @@ export async function setInvestorProfileHandler(req: Request, res: Response) {
     select: USER_SELECT,
   });
 
+  return res.json({ success: true, data: { user } });
+}
+
+// PUT /api/auth/account  (authGuard aplicado na rota)
+export async function updateAccountHandler(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) return res.status(401).json({ success: false, message: "Não autenticado" });
+
+  const { name, email, currentPassword, newPassword } = req.body ?? {};
+  const updateData: Record<string, unknown> = {};
+
+  if (name !== undefined) updateData.name = name?.trim() || null;
+
+  if (email) {
+    const normalized = email.toLowerCase().trim();
+    const conflict = await prisma.user.findFirst({ where: { email: normalized, NOT: { id: userId } } });
+    if (conflict) return res.status(400).json({ success: false, message: "E-mail já está em uso" });
+    updateData.email = normalized;
+  }
+
+  if (newPassword) {
+    if (!currentPassword)
+      return res.status(400).json({ success: false, message: "Informe a senha atual para alterá-la" });
+    if (newPassword.length < 6)
+      return res.status(400).json({ success: false, message: "Nova senha deve ter no mínimo 6 caracteres" });
+
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { password: true } });
+    const valid = await bcrypt.compare(currentPassword, current!.password);
+    if (!valid) return res.status(400).json({ success: false, message: "Senha atual incorreta" });
+
+    updateData.password = await bcrypt.hash(newPassword, 12);
+  }
+
+  if (Object.keys(updateData).length === 0)
+    return res.status(400).json({ success: false, message: "Nenhum dado para atualizar" });
+
+  const user = await prisma.user.update({ where: { id: userId }, data: updateData, select: USER_SELECT });
   return res.json({ success: true, data: { user } });
 }

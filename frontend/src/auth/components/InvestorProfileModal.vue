@@ -2,7 +2,12 @@
 import { ref, computed, watch, onMounted } from "vue";
 import { useAuthStore, type InvestorProfileName } from "@/auth/stores/authStore";
 
-const emit = defineEmits<{ (e: "done"): void }>();
+const props = defineProps<{ closeable?: boolean }>();
+const emit  = defineEmits<{ (e: "done"): void; (e: "close"): void }>();
+
+function tryClose() {
+  if (props.closeable) emit("close");
+}
 
 const authStore = useAuthStore();
 
@@ -211,10 +216,10 @@ const QUESTIONS: Question[] = [
     id: 18, dimension: "Horizonte e Objetivos",
     text: "Qual classe de ativos você prefere?",
     options: [
-      { label: "Poupança / Tesouro Selic", points: 0 },
-      { label: "Renda fixa",              points: 2 },
-      { label: "Fundos / FIIs",           points: 4 },
-      { label: "Ações / ETFs / Cripto",   points: 5 },
+      { label: "Poupança / Tesouro Selic (capital garantido)",          points: 0 },
+      { label: "Renda Fixa diversificada (CDB, LCI, LCA, IPCA+)",      points: 2 },
+      { label: "Renda Variável moderada (Ações, FIIs, ETFs)",           points: 4 },
+      { label: "Alta volatilidade (Cripto, Derivativos, alavancagem)",  points: 5 },
     ],
   },
 ];
@@ -299,6 +304,32 @@ const currentAnswered = computed(() => {
 // Passos (0-based) que foram pré-preenchidos automaticamente
 const autoFilled = ref<Set<number>>(new Set());
 
+// Mensagem explicativa específica por passo auto-preenchido
+const autoFillMessage = computed<string>(() => {
+  const step = currentStep.value;
+  if (step === 16) {
+    const q1Set  = multiSelections.value[0] ?? new Set<number>();
+    const assets = [...q1Set].filter(i => i !== 0);
+    const labels = assets.map(i => QUESTIONS[0].options[i].label);
+    if (assets.length === 0) return "Você indicou que não investe ainda → selecionamos 'Não diversifico'.";
+    const listed  = labels.length <= 2
+      ? labels.join(" e ")
+      : labels.slice(0, -1).join(", ") + " e " + labels[labels.length - 1];
+    const nivel = assets.length === 1 ? "Pouco" : assets.length <= 3 ? "Diversificação moderada" : "Forte diversificação";
+    return `Com base na Q1 (${assets.length} tipo${assets.length > 1 ? "s" : ""} de ativo: ${listed}), sugerimos "${nivel}".`;
+  }
+  if (step === 17) {
+    const q1Set  = multiSelections.value[0] ?? new Set<number>();
+    const maxPts = answers.value[0] ?? 0;
+    const hasNone = q1Set.has(0) && q1Set.size === 1;
+    if (hasNone || maxPts === 0) return "Você indicou que não investe ainda → sugerimos 'Poupança / Tesouro Selic'.";
+    const srcLabel  = QUESTIONS[0].options.find(o => o.points === maxPts)?.label ?? "";
+    const destLabel = QUESTIONS[17].options.find(o => o.points === answers.value[17])?.label ?? "";
+    return `Com base no ativo mais arrojado que você já usa em Q1 ("${srcLabel}"), sugerimos "${destLabel}". Ajuste se preferir.`;
+  }
+  return "Preenchido com base nas suas respostas anteriores — ajuste se necessário.";
+});
+
 // Q1 = índice 0; Q17 = índice 16; Q18 = índice 17
 function autoQ17(): number {
   const q1Indices = multiSelections.value[0] ?? new Set<number>();
@@ -381,6 +412,52 @@ function selectOption(points: number) {
 function goBack()    { if (currentStep.value > 0) currentStep.value--; }
 function goForward() { if (currentStep.value < TOTAL - 1) currentStep.value++; }
 
+// ─── Calculadora inline — Q8 (índice 7) ──────────────────────
+// Q8 opções: <5% → 0pts | 5-10% → 2pts | 10-20% → 4pts | >20% → 5pts
+
+const Q8_STEP    = 7; // índice 0-based da Q8 no array QUESTIONS
+const showCalc   = ref(false);
+const calcIncome   = ref("");   // renda mensal (R$)
+const calcInvested = ref("");   // valor investido mensalmente (R$)
+
+const calcPct = computed<number | null>(() => {
+  const inc = parseFloat(calcIncome.value.replace(/\./g, "").replace(",", "."));
+  const inv = parseFloat(calcInvested.value.replace(/\./g, "").replace(",", "."));
+  if (!inc || !inv || inc <= 0) return null;
+  return Math.min((inv / inc) * 100, 100); // limita em 100%
+});
+
+const calcMatchedPts = computed<number | null>(() => {
+  const pct = calcPct.value;
+  if (pct === null) return null;
+  if (pct < 5)   return 0;
+  if (pct <= 10) return 2;
+  if (pct <= 20) return 4;
+  return 5;
+});
+
+const calcMatchedLabel = computed<string>(() => {
+  const pts = calcMatchedPts.value;
+  if (pts === null) return "";
+  const opt = QUESTIONS[Q8_STEP].options.find(o => o.points === pts);
+  return opt?.label ?? "";
+});
+
+function applyCalc() {
+  if (calcMatchedPts.value === null) return;
+  showCalc.value = false;
+  selectOption(calcMatchedPts.value);
+}
+
+// Fecha e limpa a calculadora ao navegar para outro passo
+watch(currentStep, () => {
+  if (currentStep.value !== Q8_STEP) {
+    showCalc.value     = false;
+    calcIncome.value   = "";
+    calcInvested.value = "";
+  }
+});
+
 // ─── Classificação ────────────────────────────────────────────
 
 function calcProfile(score: number): InvestorProfileName {
@@ -457,10 +534,19 @@ const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; d
 </script>
 
 <template>
-  <!-- Overlay bloqueante -->
-  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  <!-- Overlay — clicável apenas quando closeable -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+       @click.self="tryClose">
 
-    <div class="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+      <!-- Botão fechar (só quando closeable) -->
+      <button v-if="closeable" @click="tryClose"
+        class="absolute top-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full
+               text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
+               hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        ✕
+      </button>
 
       <!-- ══════════════════ INTRO ══════════════════ -->
       <template v-if="mode === 'intro'">
@@ -499,7 +585,7 @@ const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; d
                :style="{ width: progress + '%' }" />
         </div>
 
-        <div class="p-6 flex flex-col gap-4 overflow-y-auto">
+        <div class="p-6 flex flex-col gap-4 overflow-y-auto flex-1">
 
           <!-- Cabeçalho -->
           <div class="flex items-center justify-between flex-shrink-0">
@@ -519,11 +605,11 @@ const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; d
 
           <!-- Banner de auto-preenchimento -->
           <div v-if="autoFilled.has(currentStep)"
-            class="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300
+            class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300
                    bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800
                    rounded-lg px-3 py-2">
-            <span>✨</span>
-            <span>Preenchido com base na sua resposta anterior — ajuste se necessário.</span>
+            <span class="flex-shrink-0 mt-px">✨</span>
+            <span>{{ autoFillMessage }}</span>
           </div>
 
           <!-- ── Opções MULTI-SELECT (checkboxes) ── -->
@@ -565,6 +651,47 @@ const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; d
             </button>
           </div>
 
+          <!-- ── Calculadora inline — só na Q8 ── -->
+          <div v-if="currentStep === Q8_STEP">
+            <button @click="showCalc = !showCalc"
+              class="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+              <span>🧮</span>
+              <span>{{ showCalc ? 'Fechar calculadora' : 'Calcular automaticamente' }}</span>
+            </button>
+
+            <div v-if="showCalc"
+              class="mt-3 p-4 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Renda mensal (R$)</label>
+                  <input v-model="calcIncome" type="text" inputmode="decimal" placeholder="ex: 5000"
+                    class="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600
+                           bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Valor investido (R$)</label>
+                  <input v-model="calcInvested" type="text" inputmode="decimal" placeholder="ex: 800"
+                    class="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600
+                           bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+              </div>
+
+              <div v-if="calcPct !== null" class="flex items-center justify-between text-sm">
+                <span class="text-gray-500 dark:text-gray-400">
+                  Percentual: <strong class="text-gray-800 dark:text-gray-200">{{ calcPct.toFixed(1) }}%</strong>
+                </span>
+                <span class="text-indigo-600 dark:text-indigo-400 font-semibold">→ {{ calcMatchedLabel }}</span>
+              </div>
+
+              <button @click="applyCalc" :disabled="calcMatchedPts === null"
+                class="w-full py-2 text-sm font-semibold rounded-lg transition-colors
+                       bg-indigo-600 hover:bg-indigo-700 text-white
+                       disabled:opacity-40 disabled:cursor-not-allowed">
+                Aplicar resposta
+              </button>
+            </div>
+          </div>
+
           <!-- Navegação -->
           <div class="flex items-center justify-between pt-1 flex-shrink-0">
             <button @click="goBack" :disabled="currentStep === 0"
@@ -588,6 +715,69 @@ const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; d
           </div>
 
         </div>
+
+        <!-- ── Linear Gauge — perfil estimado em tempo real ── -->
+        <div class="px-6 pb-5 pt-3 border-t border-gray-100 dark:border-gray-800 flex-shrink-0 select-none">
+          <p class="text-[10px] uppercase tracking-widest text-gray-400 text-center mb-2">
+            Perfil estimado com base nas respostas
+          </p>
+
+          <div class="relative">
+
+            <!-- Ponteiro com pontuação -->
+            <div class="relative h-6 mb-0.5 pointer-events-none">
+              <div class="absolute flex flex-col items-center transition-all duration-500 ease-out"
+                   :style="{ left: `${Math.min(97, Math.max(3, (totalScore / 90) * 100))}%`, transform: 'translateX(-50%)' }">
+                <span class="text-[11px] font-bold leading-none mb-0.5 transition-colors duration-300"
+                      :class="{
+                        'text-blue-500 dark:text-blue-400':    questResult === 'CONSERVADOR',
+                        'text-amber-500 dark:text-amber-400':  questResult === 'MODERADO',
+                        'text-emerald-500 dark:text-emerald-400': questResult === 'AGRESSIVO',
+                      }">
+                  {{ totalScore }} pts
+                </span>
+                <!-- triângulo apontando para baixo -->
+                <svg width="12" height="8" viewBox="0 0 12 8" class="transition-colors duration-300"
+                     :class="{
+                       'text-blue-500':    questResult === 'CONSERVADOR',
+                       'text-amber-500':   questResult === 'MODERADO',
+                       'text-emerald-500': questResult === 'AGRESSIVO',
+                     }">
+                  <polygon points="6,8 0,0 12,0" fill="currentColor" />
+                </svg>
+              </div>
+            </div>
+
+            <!-- Barra colorida -->
+            <div class="flex h-7 rounded-xl overflow-hidden">
+              <div class="flex-1 flex items-center justify-center gap-1 text-white text-[11px] font-semibold
+                          transition-all duration-300"
+                   :class="questResult === 'CONSERVADOR' ? 'bg-blue-500' : 'bg-blue-300 dark:bg-blue-700/60'">
+                🛡️ Conservador
+              </div>
+              <div class="flex-1 flex items-center justify-center gap-1 text-white text-[11px] font-semibold
+                          transition-all duration-300"
+                   :class="questResult === 'MODERADO' ? 'bg-amber-500' : 'bg-amber-300 dark:bg-amber-700/60'">
+                ⚖️ Moderado
+              </div>
+              <div class="flex-1 flex items-center justify-center gap-1 text-white text-[11px] font-semibold
+                          transition-all duration-300"
+                   :class="questResult === 'AGRESSIVO' ? 'bg-emerald-500' : 'bg-emerald-300 dark:bg-emerald-700/60'">
+                🚀 Agressivo
+              </div>
+            </div>
+
+            <!-- Marcas de escala -->
+            <div class="relative h-4 mt-0.5">
+              <span class="absolute text-[10px] text-gray-400" style="left: 0">0</span>
+              <span class="absolute text-[10px] text-gray-400 -translate-x-1/2" style="left: 33.33%">30</span>
+              <span class="absolute text-[10px] text-gray-400 -translate-x-1/2" style="left: 66.66%">60</span>
+              <span class="absolute text-[10px] text-gray-400 -translate-x-full" style="left: 100%">90</span>
+            </div>
+
+          </div>
+        </div>
+
       </template>
 
       <!-- ══════════════════ RESULTADO ══════════════════ -->
