@@ -4,14 +4,19 @@ import api from "@/shared/utils/api";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
-export type UserRole = "USER" | "ADMIN";
+export type UserRole             = "USER" | "ADMIN";
+export type InvestorProfileName  = "CONSERVADOR" | "MODERADO" | "AGRESSIVO";
+export type InvestorProfileChoice = "quest" | "choice";
 
 export interface AuthUser {
-  id:        string;
-  email:     string;
-  name:      string | null;
-  role:      UserRole;
-  createdAt: string;
+  id:                    string;
+  email:                 string;
+  name:                  string | null;
+  role:                  UserRole;
+  investorProfile:       InvestorProfileName | null;
+  investorProfileChoice: InvestorProfileChoice | null;
+  investorProfileScore:  number | null;
+  createdAt:             string;
 }
 
 // ─── Store ────────────────────────────────────────────────────
@@ -22,9 +27,13 @@ export const useAuthStore = defineStore("auth", () => {
   const loading = ref(false);
   const error   = ref<string | null>(null);
 
-  const isAuthenticated = computed(() => !!token.value);
-  const isAdmin         = computed(() => user.value?.role === "ADMIN");
-  const userName        = computed(() => user.value?.name ?? user.value?.email ?? "");
+  const isAuthenticated  = computed(() => !!token.value);
+  const isAdmin          = computed(() => user.value?.role === "ADMIN");
+  const userName         = computed(() => user.value?.name ?? user.value?.email ?? "");
+  // Perfil definido = tem investorProfile. Admin está sempre isento.
+  const needsProfile     = computed(() =>
+    isAuthenticated.value && !isAdmin.value && !user.value?.investorProfile
+  );
 
   // ─── Persistir no localStorage ─────────────────────────────
 
@@ -101,9 +110,23 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  // ─── Salvar perfil de investidor ───────────────────────────
+
+  async function saveInvestorProfile(
+    profile: InvestorProfileName,
+    method:  InvestorProfileChoice,
+    score?:  number
+  ) {
+    const res = await api.put<{ success: boolean; data: { user: AuthUser } }>(
+      "/auth/investor-profile", { profile, method, score }
+    );
+    user.value = res.data.data.user;
+    persist();
+  }
+
   return {
     token, user, loading, error,
-    isAuthenticated, isAdmin, userName,
-    login, register, logout, checkAuth,
+    isAuthenticated, isAdmin, userName, needsProfile,
+    login, register, logout, checkAuth, saveInvestorProfile,
   };
 });

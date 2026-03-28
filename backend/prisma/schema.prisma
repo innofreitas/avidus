@@ -12,6 +12,11 @@ enum UserRole {
   ADMIN
 }
 
+enum InvestorProfileChoice {
+  quest
+  choice
+}
+
 enum InvestorProfile {
   GENERICO
   CONSERVADOR
@@ -122,13 +127,16 @@ model StockSectorPercentile {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String   // bcrypt hash
-  name      String?
-  role      UserRole @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String                 @id @default(cuid())
+  email                 String                 @unique
+  password              String                 // bcrypt hash
+  name                  String?
+  role                  UserRole               @default(USER)
+  investorProfile       InvestorProfile?       // null = não definido ainda
+  investorProfileChoice InvestorProfileChoice? // "quest" | "choice"
+  investorProfileScore  Int?                   // pontuação do questionário (quando via quest)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@map("users")
 }

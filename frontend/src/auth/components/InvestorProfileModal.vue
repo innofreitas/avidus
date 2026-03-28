@@ -1,0 +1,481 @@
+<script setup lang="ts">
+import { ref, computed } from "vue";
+import { useAuthStore, type InvestorProfileName } from "@/auth/stores/authStore";
+
+const emit = defineEmits<{ (e: "done"): void }>();
+
+const authStore = useAuthStore();
+
+// ─── Modo: "intro" | "quest" | "result" | "choice" ───────────
+type Mode = "intro" | "quest" | "result" | "choice";
+const mode = ref<Mode>("intro");
+
+// ─── Questionário ─────────────────────────────────────────────
+
+interface Option { label: string; points: number }
+interface Question { id: number; dimension: string; text: string; options: Option[] }
+
+const QUESTIONS: Question[] = [
+  // Tolerância Psicológica (1–7)
+  {
+    id: 1, dimension: "Tolerância Psicológica",
+    text: "Qual sua experiência com investimentos?",
+    options: [
+      { label: "Nenhuma", points: 0 },
+      { label: "Apenas poupança ou renda fixa simples", points: 1 },
+      { label: "Fundos de investimento", points: 3 },
+      { label: "Ações ou FIIs", points: 4 },
+      { label: "Ações, derivativos ou cripto", points: 5 },
+    ],
+  },
+  {
+    id: 2, dimension: "Tolerância Psicológica",
+    text: "Como você reagiria se seu investimento caísse 10%?",
+    options: [
+      { label: "Resgataria imediatamente", points: 0 },
+      { label: "Ficaria muito preocupado", points: 1 },
+      { label: "Aguardaria recuperação", points: 3 },
+      { label: "Compraria mais", points: 5 },
+    ],
+  },
+  {
+    id: 3, dimension: "Tolerância Psicológica",
+    text: "Se sua carteira caísse 20% em um ano, você:",
+    options: [
+      { label: "Venderia tudo", points: 0 },
+      { label: "Reduziria exposição", points: 2 },
+      { label: "Manteria posição", points: 4 },
+      { label: "Investiria mais", points: 5 },
+    ],
+  },
+  {
+    id: 4, dimension: "Tolerância Psicológica",
+    text: "Qual frase melhor descreve seu comportamento como investidor?",
+    options: [
+      { label: "Prefiro não correr riscos", points: 0 },
+      { label: "Aceito pouco risco", points: 2 },
+      { label: "Aceito risco moderado", points: 4 },
+      { label: "Busco alto retorno mesmo com risco", points: 5 },
+    ],
+  },
+  {
+    id: 5, dimension: "Tolerância Psicológica",
+    text: "Qual volatilidade você tolera?",
+    options: [
+      { label: "Quase nenhuma", points: 0 },
+      { label: "Baixa", points: 2 },
+      { label: "Moderada", points: 4 },
+      { label: "Alta", points: 5 },
+    ],
+  },
+  {
+    id: 6, dimension: "Tolerância Psicológica",
+    text: "Você já passou por ciclos de mercado (crises)?",
+    options: [
+      { label: "Nunca investi", points: 0 },
+      { label: "Não", points: 1 },
+      { label: "Sim, parcialmente", points: 3 },
+      { label: "Sim, várias vezes", points: 5 },
+    ],
+  },
+  {
+    id: 7, dimension: "Tolerância Psicológica",
+    text: "Seu conhecimento sobre investimentos é:",
+    options: [
+      { label: "Básico", points: 1 },
+      { label: "Intermediário", points: 3 },
+      { label: "Avançado", points: 5 },
+    ],
+  },
+  // Capacidade Financeira (8–13)
+  {
+    id: 8, dimension: "Capacidade Financeira",
+    text: "Qual percentual da sua renda mensal é investido?",
+    options: [
+      { label: "Menos de 5%", points: 0 },
+      { label: "5–10%", points: 2 },
+      { label: "10–20%", points: 4 },
+      { label: "Mais de 20%", points: 5 },
+    ],
+  },
+  {
+    id: 9, dimension: "Capacidade Financeira",
+    text: "Quantos meses de reserva de emergência você possui?",
+    options: [
+      { label: "Nenhuma", points: 0 },
+      { label: "Até 3 meses", points: 2 },
+      { label: "3–6 meses", points: 4 },
+      { label: "Mais de 6 meses", points: 5 },
+    ],
+  },
+  {
+    id: 10, dimension: "Capacidade Financeira",
+    text: "Sua renda principal depende desses investimentos?",
+    options: [
+      { label: "Sim", points: 0 },
+      { label: "Parcialmente", points: 2 },
+      { label: "Não", points: 5 },
+    ],
+  },
+  {
+    id: 11, dimension: "Capacidade Financeira",
+    text: "Qual sua estabilidade de renda?",
+    options: [
+      { label: "Instável", points: 0 },
+      { label: "Moderada", points: 3 },
+      { label: "Estável", points: 5 },
+    ],
+  },
+  {
+    id: 12, dimension: "Capacidade Financeira",
+    text: "Quanto do seu patrimônio está investido?",
+    options: [
+      { label: "Mais de 80%", points: 0 },
+      { label: "50–80%", points: 2 },
+      { label: "20–50%", points: 4 },
+      { label: "Menos de 20%", points: 5 },
+    ],
+  },
+  {
+    id: 13, dimension: "Capacidade Financeira",
+    text: "Caso perca 20% do capital investido:",
+    options: [
+      { label: "Afetaria seriamente minha vida", points: 0 },
+      { label: "Afetaria parcialmente", points: 2 },
+      { label: "Teria impacto limitado", points: 4 },
+      { label: "Não afetaria", points: 5 },
+    ],
+  },
+  // Horizonte e Objetivos (14–18)
+  {
+    id: 14, dimension: "Horizonte e Objetivos",
+    text: "Qual o prazo médio dos seus investimentos?",
+    options: [
+      { label: "Menos de 1 ano", points: 0 },
+      { label: "1–3 anos", points: 2 },
+      { label: "3–5 anos", points: 4 },
+      { label: "Mais de 5 anos", points: 5 },
+    ],
+  },
+  {
+    id: 15, dimension: "Horizonte e Objetivos",
+    text: "Seu principal objetivo é:",
+    options: [
+      { label: "Preservar capital", points: 0 },
+      { label: "Gerar renda", points: 2 },
+      { label: "Crescimento moderado", points: 4 },
+      { label: "Crescimento agressivo", points: 5 },
+    ],
+  },
+  {
+    id: 16, dimension: "Horizonte e Objetivos",
+    text: "Você pretende fazer aportes regulares?",
+    options: [
+      { label: "Não", points: 0 },
+      { label: "Ocasionalmente", points: 2 },
+      { label: "Sim, regularmente", points: 5 },
+    ],
+  },
+  {
+    id: 17, dimension: "Horizonte e Objetivos",
+    text: "Como você diversifica seus investimentos?",
+    options: [
+      { label: "Não diversifico", points: 0 },
+      { label: "Pouco", points: 2 },
+      { label: "Diversificação moderada", points: 4 },
+      { label: "Forte diversificação", points: 5 },
+    ],
+  },
+  {
+    id: 18, dimension: "Horizonte e Objetivos",
+    text: "Qual classe de ativos você prefere?",
+    options: [
+      { label: "Poupança / Tesouro Selic", points: 0 },
+      { label: "Renda fixa", points: 2 },
+      { label: "Fundos / FIIs", points: 4 },
+      { label: "Ações / ETFs / Cripto", points: 5 },
+    ],
+  },
+];
+
+const TOTAL = QUESTIONS.length; // 18
+
+// ─── Estado do questionário ───────────────────────────────────
+const currentStep = ref(0);                          // índice 0..17
+const answers     = ref<(number | null)[]>(Array(TOTAL).fill(null));
+const saving      = ref(false);
+const saveError   = ref<string | null>(null);
+
+const currentQ    = computed(() => QUESTIONS[currentStep.value]);
+const currentAns  = computed(() => answers.value[currentStep.value]);
+const progress    = computed(() => ((currentStep.value) / TOTAL) * 100);
+const totalScore  = computed(() => answers.value.reduce<number>((s, v) => s + (v ?? 0), 0));
+const allAnswered  = computed(() => answers.value.every(v => v !== null));
+
+function calcProfile(score: number): InvestorProfileName {
+  if (score <= 30) return "CONSERVADOR";
+  if (score <= 60) return "MODERADO";
+  return "AGRESSIVO";
+}
+
+const questResult = computed<InvestorProfileName>(() => calcProfile(totalScore.value));
+
+// Seleciona uma opção e avança automaticamente se não for a última
+function selectOption(points: number) {
+  answers.value[currentStep.value] = points;
+  if (currentStep.value < TOTAL - 1) {
+    setTimeout(() => { currentStep.value++; }, 220);
+  }
+}
+
+function goBack()    { if (currentStep.value > 0) currentStep.value--; }
+function goForward() { if (currentStep.value < TOTAL - 1) currentStep.value++; }
+
+// ─── Escolha direta ───────────────────────────────────────────
+const PROFILES: { name: InvestorProfileName; label: string; desc: string; icon: string; color: string }[] = [
+  {
+    name: "CONSERVADOR", label: "Conservador", icon: "🛡️",
+    color: "border-blue-400 dark:border-blue-500",
+    desc: "Prioriza preservar o capital. Prefere renda fixa e baixa volatilidade. Dorme tranquilo mesmo com retornos menores.",
+  },
+  {
+    name: "MODERADO", label: "Moderado", icon: "⚖️",
+    color: "border-indigo-400 dark:border-indigo-500",
+    desc: "Equilíbrio entre segurança e crescimento. Aceita alguma oscilação em busca de retornos melhores no médio prazo.",
+  },
+  {
+    name: "AGRESSIVO", label: "Agressivo", icon: "🚀",
+    color: "border-emerald-400 dark:border-emerald-500",
+    desc: "Busca maximizar retornos. Tolera alta volatilidade e perdas temporárias com foco no longo prazo.",
+  },
+];
+
+const chosenProfile = ref<InvestorProfileName | null>(null);
+
+// ─── Salvar ───────────────────────────────────────────────────
+
+async function confirmQuest() {
+  saving.value    = true;
+  saveError.value = null;
+  try {
+    await authStore.saveInvestorProfile(questResult.value, "quest", totalScore.value);
+    emit("done");
+  } catch (e: any) {
+    saveError.value = e?.message ?? "Erro ao salvar perfil";
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function confirmChoice() {
+  if (!chosenProfile.value) return;
+  saving.value    = true;
+  saveError.value = null;
+  try {
+    await authStore.saveInvestorProfile(chosenProfile.value, "choice");
+    emit("done");
+  } catch (e: any) {
+    saveError.value = e?.message ?? "Erro ao salvar perfil";
+  } finally {
+    saving.value = false;
+  }
+}
+
+// Mapeamento de label/cor para exibição do resultado
+const PROFILE_META: Record<InvestorProfileName, { label: string; icon: string; desc: string; bg: string; text: string }> = {
+  CONSERVADOR: { label: "Conservador", icon: "🛡️", bg: "bg-blue-50 dark:bg-blue-950/40",   text: "text-blue-700 dark:text-blue-300",    desc: "Você prioriza segurança e preservação de capital." },
+  MODERADO:    { label: "Moderado",    icon: "⚖️", bg: "bg-indigo-50 dark:bg-indigo-950/40", text: "text-indigo-700 dark:text-indigo-300", desc: "Você busca equilíbrio entre segurança e crescimento." },
+  AGRESSIVO:   { label: "Agressivo",  icon: "🚀", bg: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300", desc: "Você tolera riscos em busca de retornos maiores." },
+};
+</script>
+
+<template>
+  <!-- Overlay bloqueante -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+
+    <div class="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+
+      <!-- ══════════════════ INTRO ══════════════════ -->
+      <template v-if="mode === 'intro'">
+        <div class="p-8 text-center space-y-4">
+          <div class="text-5xl">📊</div>
+          <h2 class="text-xl font-bold">Defina seu perfil de investidor</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+            Para personalizar sua experiência na plataforma, precisamos conhecer
+            seu perfil de risco. Isso leva menos de 3 minutos.
+          </p>
+          <div class="grid grid-cols-2 gap-3 pt-2">
+            <button @click="mode = 'quest'"
+              class="btn-primary flex flex-col items-center gap-1 py-4 text-sm">
+              <span class="text-2xl">📋</span>
+              <span class="font-semibold">Responder questionário</span>
+              <span class="text-xs opacity-75">18 perguntas · ~3 min</span>
+            </button>
+            <button @click="mode = 'choice'"
+              class="flex flex-col items-center gap-1 py-4 px-3 rounded-xl text-sm border-2
+                     border-gray-200 dark:border-gray-700 hover:border-indigo-400
+                     dark:hover:border-indigo-500 transition-colors">
+              <span class="text-2xl">🎯</span>
+              <span class="font-semibold">Escolher diretamente</span>
+              <span class="text-xs text-gray-400">Já sei meu perfil</span>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <!-- ══════════════════ QUESTIONÁRIO ══════════════════ -->
+      <template v-else-if="mode === 'quest'">
+
+        <!-- Barra de progresso -->
+        <div class="h-1.5 bg-gray-100 dark:bg-gray-800">
+          <div class="h-full bg-indigo-500 transition-all duration-300 ease-out rounded-r-full"
+               :style="{ width: progress + '%' }" />
+        </div>
+
+        <div class="p-6 flex flex-col gap-5">
+
+          <!-- Cabeçalho da pergunta -->
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-widest text-indigo-500">
+              {{ currentQ.dimension }}
+            </span>
+            <span class="text-xs text-gray-400">{{ currentStep + 1 }} / {{ TOTAL }}</span>
+          </div>
+
+          <!-- Pergunta -->
+          <h3 class="text-base font-semibold leading-snug">{{ currentQ.text }}</h3>
+
+          <!-- Opções -->
+          <div class="space-y-2">
+            <button v-for="opt in currentQ.options" :key="opt.points"
+              @click="selectOption(opt.points)"
+              :class="[
+                'w-full text-left px-4 py-3 rounded-xl border-2 text-sm transition-all duration-150',
+                currentAns === opt.points
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700',
+              ]">
+              {{ opt.label }}
+            </button>
+          </div>
+
+          <!-- Navegação -->
+          <div class="flex items-center justify-between pt-1">
+            <button @click="goBack" :disabled="currentStep === 0"
+              class="text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200
+                     disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1">
+              ← Voltar
+            </button>
+
+            <div class="flex gap-2">
+              <!-- Último passo: ver resultado -->
+              <button v-if="currentStep === TOTAL - 1 && currentAns !== null"
+                @click="mode = 'result'"
+                class="btn-primary text-sm px-5 py-2">
+                Ver resultado →
+              </button>
+              <!-- Pulos intermediários -->
+              <button v-else-if="currentStep < TOTAL - 1 && currentAns !== null"
+                @click="goForward"
+                class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                Avançar →
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </template>
+
+      <!-- ══════════════════ RESULTADO ══════════════════ -->
+      <template v-else-if="mode === 'result'">
+        <div class="p-8 flex flex-col items-center gap-5 text-center">
+
+          <!-- Score -->
+          <div :class="['w-full rounded-xl p-5', PROFILE_META[questResult].bg]">
+            <div class="text-4xl mb-2">{{ PROFILE_META[questResult].icon }}</div>
+            <p class="text-xs uppercase tracking-widest font-semibold text-gray-500 mb-1">
+              Seu perfil de investidor
+            </p>
+            <h2 :class="['text-2xl font-black', PROFILE_META[questResult].text]">
+              {{ PROFILE_META[questResult].label }}
+            </h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              {{ PROFILE_META[questResult].desc }}
+            </p>
+            <p class="text-xs text-gray-400 mt-3">
+              Pontuação: <strong>{{ totalScore }} / 90</strong>
+            </p>
+          </div>
+
+          <p class="text-xs text-gray-400">
+            Você pode alterar seu perfil a qualquer momento nas configurações de conta.
+          </p>
+
+          <div v-if="saveError" class="text-sm text-red-600 dark:text-red-400">{{ saveError }}</div>
+
+          <div class="flex gap-3 w-full">
+            <button @click="mode = 'quest'; currentStep = 0"
+              class="flex-1 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl
+                     hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              Refazer
+            </button>
+            <button @click="confirmQuest" :disabled="saving"
+              class="flex-1 btn-primary text-sm py-2">
+              {{ saving ? "Salvando..." : "Confirmar perfil" }}
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <!-- ══════════════════ ESCOLHA DIRETA ══════════════════ -->
+      <template v-else-if="mode === 'choice'">
+        <div class="p-6 flex flex-col gap-5">
+          <div class="text-center space-y-1">
+            <h2 class="text-lg font-bold">Escolha seu perfil</h2>
+            <p class="text-xs text-gray-400">Selecione o perfil que melhor representa você</p>
+          </div>
+
+          <div class="space-y-3">
+            <button v-for="p in PROFILES" :key="p.name"
+              @click="chosenProfile = p.name"
+              :class="[
+                'w-full text-left p-4 rounded-xl border-2 transition-all duration-150',
+                chosenProfile === p.name
+                  ? p.color + ' bg-gray-50 dark:bg-gray-800/60'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
+              ]">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">{{ p.icon }}</span>
+                <div class="flex-1">
+                  <p class="font-semibold text-sm">{{ p.label }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ p.desc }}</p>
+                </div>
+                <div :class="[
+                  'w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors',
+                  chosenProfile === p.name
+                    ? 'border-indigo-500 bg-indigo-500'
+                    : 'border-gray-300 dark:border-gray-600',
+                ]" />
+              </div>
+            </button>
+          </div>
+
+          <div v-if="saveError" class="text-sm text-red-600 dark:text-red-400 text-center">{{ saveError }}</div>
+
+          <div class="flex gap-3">
+            <button @click="mode = 'intro'"
+              class="flex-1 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl
+                     hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              ← Voltar
+            </button>
+            <button @click="confirmChoice" :disabled="!chosenProfile || saving"
+              class="flex-1 btn-primary text-sm py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {{ saving ? "Salvando..." : "Confirmar" }}
+            </button>
+          </div>
+        </div>
+      </template>
+
+    </div>
+  </div>
+</template>

@@ -33,15 +33,47 @@ export async function loginHandler(req: Request, res: Response) {
   }
 }
 
+const USER_SELECT = {
+  id: true, email: true, name: true, role: true,
+  investorProfile: true, investorProfileChoice: true, investorProfileScore: true,
+  createdAt: true,
+} as const;
+
 // GET /api/auth/me  (authGuard aplicado na rota)
 export async function meHandler(req: Request, res: Response) {
   const userId = (req as any).user?.sub;
   if (!userId) return res.status(401).json({ success: false, message: "Não autenticado" });
 
-  const user = await prisma.user.findUnique({
-    where:  { id: userId },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
   if (!user) return res.status(404).json({ success: false, message: "Usuário não encontrado" });
+  return res.json({ success: true, data: { user } });
+}
+
+// PUT /api/auth/investor-profile  (authGuard aplicado na rota)
+export async function setInvestorProfileHandler(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) return res.status(401).json({ success: false, message: "Não autenticado" });
+
+  const { profile, method, score } = req.body ?? {};
+  const validProfiles = ["CONSERVADOR", "MODERADO", "AGRESSIVO"];
+  const validMethods  = ["quest", "choice"];
+
+  if (!validProfiles.includes(profile)) {
+    return res.status(400).json({ success: false, message: "Perfil inválido" });
+  }
+  if (!validMethods.includes(method)) {
+    return res.status(400).json({ success: false, message: "Método inválido" });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      investorProfile:       profile,
+      investorProfileChoice: method,
+      investorProfileScore:  method === "quest" && typeof score === "number" ? score : undefined,
+    },
+    select: USER_SELECT,
+  });
+
   return res.json({ success: true, data: { user } });
 }

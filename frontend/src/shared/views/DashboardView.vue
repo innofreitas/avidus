@@ -2,8 +2,11 @@
 import { ref } from "vue";
 import TopBar from "@/shared/components/layout/TopBar.vue";
 import SideBar from "@/shared/components/layout/SideBar.vue";
+import InvestorProfileModal from "@/auth/components/InvestorProfileModal.vue";
+import { useAuthStore } from "@/auth/stores/authStore";
 
-const expanded = ref(true);
+const expanded  = ref(true);
+const authStore = useAuthStore();
 </script>
 
 <template>
@@ -15,5 +18,9 @@ const expanded = ref(true);
         <RouterView />
       </div>
     </main>
+
+    <!-- Modal de perfil de investidor — exibido apenas para usuários sem perfil definido -->
+    <!-- needsProfile torna-se false automaticamente após saveInvestorProfile atualizar o store -->
+    <InvestorProfileModal v-if="authStore.needsProfile" @done="() => {}" />
   </div>
 </template>
