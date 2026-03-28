@@ -20,8 +20,9 @@ interface Question {
   id: number;
   dimension: string;
   text: string;
-  hint?: string;          // instrução extra (ex: "Selecione todas que se aplicam")
-  multiSelect?: boolean;  // se true → checkboxes + score = max dos selecionados
+  hint?: string;                      // instrução extra (ex: "Selecione todas que se aplicam")
+  multiSelect?: boolean;              // se true → checkboxes + score = max dos selecionados
+  mutuallyExclusiveGroups?: number[][]; // grupos de índices onde só 1 pode ser selecionado
   options: Option[];
 }
 
@@ -179,6 +180,7 @@ const QUESTIONS: Question[] = [
     text: "Seus principais objetivos são:",
     hint: "Selecione todos que se aplicam",
     multiSelect: true,
+    mutuallyExclusiveGroups: [[2, 3]], // Crescimento moderado XOR Crescimento agressivo
     options: [
       { label: "Preservar capital",        points: 0 },
       { label: "Gerar renda",              points: 2 },
@@ -337,31 +339,33 @@ const NONE_IDX = 0; // índice da opção "Nenhuma" na Q1
 
 function toggleMultiOption(optIdx: number) {
   const step = currentStep.value;
+  const q    = currentQ.value;
   const prev = new Set(multiSelections.value[step] ?? []);
 
-  if (optIdx === NONE_IDX) {
-    // "Nenhuma" → limpa tudo e seleciona só ela
+  if (step === 0 && optIdx === NONE_IDX) {
+    // Q1 — "Nenhuma" é exclusiva com todas as demais
     prev.clear();
     prev.add(NONE_IDX);
   } else {
-    // Qualquer outra → desmarca "Nenhuma" se estiver selecionada
-    prev.delete(NONE_IDX);
+    if (step === 0) prev.delete(NONE_IDX); // Q1 — desmarca "Nenhuma" ao escolher outra
+
     if (prev.has(optIdx)) {
       prev.delete(optIdx);
     } else {
+      // Remove opções do mesmo grupo mutuamente exclusivo antes de adicionar
+      for (const group of q.mutuallyExclusiveGroups ?? []) {
+        if (group.includes(optIdx)) group.forEach(i => prev.delete(i));
+      }
       prev.add(optIdx);
     }
   }
 
   multiSelections.value = { ...multiSelections.value, [step]: prev };
 
-  // Calcula pontuação: max dos pontos das opções selecionadas
-  if (prev.size === 0) {
-    answers.value[step] = null;
-  } else {
-    const pts = [...prev].map(i => currentQ.value.options[i].points);
-    answers.value[step] = Math.max(...pts);
-  }
+  // Pontuação = max dos pontos das opções selecionadas
+  answers.value[step] = prev.size === 0
+    ? null
+    : Math.max(...[...prev].map(i => q.options[i].points));
 }
 
 // ─── Lógica single-select ─────────────────────────────────────
