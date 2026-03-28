@@ -4,7 +4,7 @@ import { Chart, registerables } from "chart.js";
 import App from "./App.vue";
 import router from "./router/index";
 import "./assets/main.css";
-import { useAuthStore } from "./stores/authStore";
+import { useAuthStore } from "./auth/stores/authStore";
 
 Chart.register(...registerables);
 

@@ -1,0 +1,352 @@
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from "vue";
+import Swal from "sweetalert2";
+import { useConfigStore } from "@/shared/stores/configStore";
+import { ALL_PROFILES, PROFILE_LABELS, PROFILE_ICONS, INDICATOR_LABELS } from "@/types";
+import type { ProfileName } from "@/types";
+
+const MySwal = Swal.mixin({
+  customClass: {
+    popup:         "swal-avidus",
+    confirmButton: "btn-danger text-sm",
+    cancelButton:  "btn-secondary text-sm",
+  },
+  buttonsStyling: false,
+  reverseButtons: true,
+});
+
+const store   = useConfigStore();
+const active  = ref<ProfileName>("MODERADO");
+const saving  = ref(false);
+const saveOk  = ref(false);
+const saveErr = ref<string | null>(null);
+
+onMounted(async () => { if (!store.profiles.length) await store.fetchAll(); });
+
+const profile = computed(() => store.profiles.find((p) => p.profile === active.value) ?? null);
+
+// Cópias locais editáveis
+const localInds  = ref<any[]>([]);
+const localThrs  = ref<any[]>([]);
+const localFactors = ref<any[]>([]);
+
+watch(profile, (p) => {
+  if (!p) return;
+  localInds.value = p.indicators.map((i) => ({ ...i }));
+  localThrs.value = [...p.thresholds].sort((a, b) => b.minScore - a.minScore).map((t) => ({ ...t }));
+  localFactors.value = [...(p.sectorFactorWeights ?? [])].sort((a, b) => {
+    const order = ["valor", "qualidade", "momentum", "crescimento"];
+    return order.indexOf(a.factor) - order.indexOf(b.factor);
+  }).map((f) => ({ ...f }));
+}, { immediate: true });
+
+const totalWeight = computed(() => localInds.value.reduce((s, i) => s + Number(i.weight), 0));
+const weightOk    = computed(() => totalWeight.value <= 100.01);
+
+const totalWeightFactors = computed(() => localFactors.value.reduce((s, f) => s + Number(f.weight), 0));
+const weightFactorsOk    = computed(() => Math.abs(totalWeightFactors.value - 1.0) <= 0.01);
+
+function feedback(ok: boolean, err?: string) {
+  saveOk.value  = ok;
+  saveErr.value = err ?? null;
+  if (ok) setTimeout(() => { saveOk.value = false; }, 3000);
+}
+
+async function saveIndicators() {
+  if (!profile.value || !weightOk.value) return;
+  saving.value = true;
+  try {
+    await store.updateIndicators(active.value, localInds.value);
+    feedback(true);
+  } catch (e: any) { feedback(false, e.message); }
+  finally { saving.value = false; }
+}
+
+async function saveThresholds() {
+  if (!profile.value) return;
+  saving.value = true;
+  try {
+    await store.updateThresholds(active.value, localThrs.value);
+    feedback(true);
+  } catch (e: any) { feedback(false, e.message); }
+  finally { saving.value = false; }
+}
+
+async function saveSectorFactorWeights() {
+  if (!profile.value || !weightFactorsOk.value) return;
+  saving.value = true;
+  try {
+    await store.updateSectorFactorWeights(active.value, localFactors.value);
+    feedback(true);
+  } catch (e: any) { feedback(false, e.message); }
+  finally { saving.value = false; }
+}
+
+async function doResetProfile() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Resetar perfil",
+    html: `Deseja resetar o perfil <strong>${active.value}</strong> para os valores padrão?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "🔄 Resetar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function doResetAll() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Resetar todos os perfis",
+    text: "Deseja resetar TODOS os perfis para os valores padrão? Esta ação não pode ser desfeita.",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "🔄 Resetar Tudo",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetAll();
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function resetToDefaultIndicators() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Restaurar padrão",
+    html: `Deseja restaurar os indicadores do perfil <strong>${active.value}</strong> aos valores padrão?`,
+    icon: "info",
+    showCancelButton: true,
+    confirmButtonText: "Restaurar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function resetToDefaultThresholds() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Restaurar padrão",
+    html: `Deseja restaurar os scores do perfil <strong>${active.value}</strong> aos valores padrão?`,
+    icon: "info",
+    showCancelButton: true,
+    confirmButtonText: "Restaurar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function resetToDefaultFactors() {
+  const { isConfirmed } = await MySwal.fire({
+    title: "Restaurar padrão",
+    html: `Deseja restaurar os pesos fatoriais do perfil <strong>${active.value}</strong> aos valores padrão?`,
+    icon: "info",
+    showCancelButton: true,
+    confirmButtonText: "Restaurar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+
+  saving.value = true;
+  try {
+    await store.resetProfile(active.value);
+    feedback(true);
+  } catch (e: any) {
+    feedback(false, (e as any).message);
+  } finally {
+    saving.value = false;
+  }
+}
+</script>
+
+<template>
+  <div class="max-w-full mx-auto px-4 md:px-6 lg:px-8 space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <h1 class="text-2xl font-bold">⚙️ Configurações</h1>
+        <p class="text-sm text-gray-500 mt-1">Ajuste indicadores e scores de recomendação por perfil</p>
+      </div>
+      <div class="flex gap-2">
+        <button @click="doResetProfile" :disabled="saving" class="btn-secondary text-sm">Resetar Perfil</button>
+        <button @click="doResetAll"     :disabled="saving" class="btn-danger text-sm">Resetar Tudo</button>
+      </div>
+    </div>
+
+    <!-- Seletor de perfil -->
+    <div class="flex gap-2 flex-wrap">
+      <button v-for="p in ALL_PROFILES" :key="p"
+        @click="active = p"
+        :class="[
+          'px-4 py-2 rounded-lg text-sm font-medium transition-colors border',
+          active === p
+            ? 'bg-indigo-600 text-white border-indigo-600'
+            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-400',
+        ]">
+        {{ PROFILE_ICONS[p] }} {{ PROFILE_LABELS[p] }}
+      </button>
+    </div>
+
+    <!-- Loading / erro / não encontrado -->
+    <div v-if="store.loading" class="text-center py-12 text-gray-400">
+      <div class="animate-spin text-3xl mb-3 inline-block">⏳</div>
+      <p>Carregando configurações...</p>
+    </div>
+    <div v-else-if="store.error" class="text-center py-12 text-red-400">
+      <p class="text-2xl mb-2">❌</p>
+      <p>{{ store.error }}</p>
+      <button @click="store.fetchAll()" class="btn-secondary mt-4 text-sm">Tentar novamente</button>
+    </div>
+    <div v-else-if="!profile" class="text-center py-12 text-gray-400">
+      <p>Perfil não encontrado.</p>
+    </div>
+
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+
+      <!-- Indicadores -->
+      <div class="card flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold">📊 Pesos dos Indicadores</h2>
+          <span :class="['text-sm font-mono px-2 py-0.5 rounded', weightOk ? 'text-green-600 bg-green-50 dark:bg-green-950' : 'text-red-600 bg-red-50 dark:bg-red-950']">
+            {{ totalWeight.toFixed(1) }}/100
+          </span>
+        </div>
+
+        <p v-if="!weightOk" class="text-red-500 text-xs mb-3">⚠️ Soma dos pesos não pode ultrapassar 100</p>
+
+        <div class="space-y-3 max-h-96 overflow-y-auto pr-1 flex-1">
+          <div v-for="ind in localInds" :key="ind.indicatorId" class="flex items-center gap-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400 w-36 truncate flex-shrink-0">
+              {{ INDICATOR_LABELS[ind.indicatorId] ?? ind.indicatorId }}
+            </span>
+            <input type="range" min="0" max="50" step="0.5"
+              v-model.number="ind.weight" class="flex-1 h-2 accent-indigo-600" />
+            <input type="number" min="0" max="50" step="0.5"
+              v-model.number="ind.weight" class="input w-16 text-sm text-center py-1 px-2" />
+            <span class="text-xs text-gray-400">%</span>
+          </div>
+        </div>
+
+        <div class="mt-4 flex gap-2 justify-between">
+          <button @click="resetToDefaultIndicators" :disabled="saving" class="btn-secondary text-sm">
+            🔄 Restaurar Padrão
+          </button>
+          <button @click="saveIndicators" :disabled="saving || !weightOk" class="btn-primary text-sm">
+            {{ saving ? "Salvando..." : "Salvar Indicadores" }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Thresholds -->
+      <div class="card flex flex-col">
+        <h2 class="font-semibold mb-4">🎯 Scores de Recomendação</h2>
+        <p class="text-xs text-gray-500 mb-4">Score mínimo para cada decisão (0 a 100).</p>
+
+        <div class="space-y-3 flex-1 overflow-y-auto">
+          <div v-for="thr in localThrs" :key="thr.decision"
+            class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <span class="text-lg w-8 text-center flex-shrink-0">{{ thr.emoji }}</span>
+            <span class="text-sm font-medium w-32 flex-shrink-0">{{ thr.decision.replace("_", " ") }}</span>
+            <div class="flex-1">
+              <input type="range" min="0" max="100" step="1"
+                v-model.number="thr.minScore" class="w-full h-2 accent-indigo-600" />
+            </div>
+            <input type="number" min="0" max="100"
+              v-model.number="thr.minScore" class="input w-16 text-sm text-center py-1 px-2" />
+          </div>
+        </div>
+
+        <div class="mt-4 flex gap-2 justify-between">
+          <button @click="resetToDefaultThresholds" :disabled="saving" class="btn-secondary text-sm">
+            🔄 Restaurar Padrão
+          </button>
+          <button @click="saveThresholds" :disabled="saving" class="btn-primary text-sm">
+            {{ saving ? "Salvando..." : "Salvar Thresholds" }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Sector Factor Weights -->
+      <div class="card flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold">📊 Pesos Fatoriais</h2>
+          <span :class="['text-sm font-mono px-2 py-0.5 rounded', weightFactorsOk ? 'text-green-600 bg-green-50 dark:bg-green-950' : 'text-red-600 bg-red-50 dark:bg-red-950']">
+            {{ (totalWeightFactors * 100).toFixed(1) }}%
+          </span>
+        </div>
+
+        <p class="text-xs text-gray-500 mb-4">Ponderação dos 4 fatores na comparação setorial.</p>
+
+        <p v-if="!weightFactorsOk" class="text-red-500 text-xs mb-3">⚠️ Soma deve ser 100% (±1%)</p>
+
+        <div class="space-y-3 flex-1 overflow-y-auto pr-1">
+          <div v-for="fac in localFactors" :key="fac.factor" class="flex items-center gap-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400 w-36 truncate flex-shrink-0 capitalize">
+              {{ fac.factor }}
+            </span>
+            <input type="range" min="0" max="100" step="1"
+              :value="fac.weight * 100" @input="(e) => fac.weight = (e.target as HTMLInputElement).valueAsNumber / 100"
+              class="flex-1 h-2 accent-indigo-600" />
+            <input type="number" min="0" max="100" step="1"
+              :value="Math.round(fac.weight * 100)" @input="(e) => fac.weight = (e.target as HTMLInputElement).valueAsNumber / 100"
+              class="input w-16 text-sm text-center py-1 px-2" />
+            <span class="text-xs text-gray-400">%</span>
+          </div>
+        </div>
+
+        <div class="mt-4 flex gap-2 justify-between">
+          <button @click="resetToDefaultFactors" :disabled="saving" class="btn-secondary text-sm">
+            🔄 Restaurar Padrão
+          </button>
+          <button @click="saveSectorFactorWeights" :disabled="saving || !weightFactorsOk" class="btn-primary text-sm">
+            {{ saving ? "Salvando..." : "Salvar Pesos" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback -->
+    <div v-if="saveErr" class="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
+      ❌ {{ saveErr }}
+    </div>
+    <div v-if="saveOk" class="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
+      ✅ Configurações salvas com sucesso!
+    </div>
+
+  </div>
+</template>
