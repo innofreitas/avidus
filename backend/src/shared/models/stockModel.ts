@@ -1,4 +1,4 @@
-import prisma from "../config/database";
+import prisma from "../../config/database";
 
 export async function getCachedStockData(ticker: string, date: string): Promise<Record<string, unknown> | null> {
   const row = await prisma.stockDataCache.findUnique({

@@ -1,8 +1,8 @@
 // backtestController.ts
 
 import { Request, Response } from "express";
-import { getCachedStockData } from "../models/stockModel";
-import { runTickerBacktest, buildPortfolioBacktest, CandlePoint } from "../services/backtestService";
+import { getCachedStockData } from "../../../shared/models/stockModel";
+import { runTickerBacktest, buildPortfolioBacktest, CandlePoint } from "../../../shared/services/backtestService";
 
 // @ts-ignore
 import YahooFinance from "yahoo-finance2";

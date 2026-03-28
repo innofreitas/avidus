@@ -4,8 +4,8 @@ import express from "express";
 import cors    from "cors";
 import prisma  from "./config/database";
 import routes  from "./routes/index";
-import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
-import { hasSeedData, resetProfileConfigs } from "./models/configModel";
+import { errorHandler, notFoundHandler } from "./shared/middlewares/errorHandler";
+import { hasSeedData, resetProfileConfigs } from "./shared/models/configModel";
 import { ensureAdminUser } from "./auth/authService";
 
 const app         = express();

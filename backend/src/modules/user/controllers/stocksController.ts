@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { prisma } from "../config/database";
-import { fetchStockList } from "../services/brapiService";
-import { getAllSectorTranslations, getDefaultSectorTranslations, getOrCreateSectorTranslation, normalizeSectorKey, updateSectorTranslation } from "../models/stockSectorModel";
+import { prisma } from "../../../config/database";
+import { fetchStockList } from "../../../shared/services/brapiService";
+import { getAllSectorTranslations, getDefaultSectorTranslations, getOrCreateSectorTranslation, normalizeSectorKey, updateSectorTranslation } from "../../../shared/models/stockSectorModel";
 
 // ─── GET /api/stocks ──────────────────────────────────────────
 

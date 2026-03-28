@@ -1,4 +1,4 @@
-import prisma from "../config/database";
+import prisma from "../../config/database";
 import type { InvestorProfile, IndicatorConfigInput, ScoreThresholdInput, SectorFactorWeightInput, ProfileConfig } from "../types";
 import { DEFAULT_INDICATORS, DEFAULT_THRESHOLDS, DEFAULT_SECTOR_FACTOR_WEIGHTS } from "../utils/defaultConfigs";
 import { ALL_PROFILES } from "../types";

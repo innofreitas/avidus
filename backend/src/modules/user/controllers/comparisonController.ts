@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { getCachedStockData, saveStockDataCache } from "../models/stockModel";
-import { fetchAllData, isValidRawData } from "../services/yahooService";
-import { extractIndicators, calcSectorPercentiles } from "../services/percentileService";
-import { prisma } from "../config/database";
+import { getCachedStockData, saveStockDataCache } from "../../../shared/models/stockModel";
+import { fetchAllData, isValidRawData } from "../../../shared/services/yahooService";
+import { extractIndicators, calcSectorPercentiles } from "../../../shared/services/percentileService";
+import { prisma } from "../../../config/database";
 
 function today() { return new Date().toISOString().slice(0, 10); }
 

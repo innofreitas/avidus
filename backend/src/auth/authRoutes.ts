@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { registerHandler, loginHandler, meHandler } from "./authController";
-import { authGuard } from "../middlewares/authGuard";
+import { authGuard } from "../modules/user/middleware/authGuard";
 
 const authRouter = Router();
 

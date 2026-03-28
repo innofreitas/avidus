@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { getCachedStockData, saveStockDataCache, deleteStockCache, listCacheEntries, listSectorPercentileEntries, deleteSectorPercentile } from "../models/stockModel";
-import { fetchAllData, isValidRawData } from "../services/yahooService";
-import { analyzeStock } from "../services/analysisService";
+import { getCachedStockData, saveStockDataCache, deleteStockCache, listCacheEntries, listSectorPercentileEntries, deleteSectorPercentile } from "../../../shared/models/stockModel";
+import { fetchAllData, isValidRawData } from "../../../shared/services/yahooService";
+import { analyzeStock } from "../../../shared/services/analysisService";
 
 function today() { return new Date().toISOString().slice(0, 10); }
 

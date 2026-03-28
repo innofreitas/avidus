@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { getAllProfileConfigs, getProfileConfig, updateProfileIndicators, updateProfileThresholds, updateSectorFactorWeights, resetProfileConfigs } from "../models/configModel";
-import { ALL_PROFILES } from "../types";
-import type { InvestorProfile } from "../types";
+import { getAllProfileConfigs, getProfileConfig, updateProfileIndicators, updateProfileThresholds, updateSectorFactorWeights, resetProfileConfigs } from "../../../shared/models/configModel";
+import { ALL_PROFILES } from "../../../shared/types";
+import type { InvestorProfile } from "../../../shared/types";
 
 function validProfile(name: string): name is InvestorProfile {
   return (ALL_PROFILES as string[]).includes(name);
