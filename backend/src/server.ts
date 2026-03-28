@@ -6,6 +6,7 @@ import prisma  from "./config/database";
 import routes  from "./routes/index";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { hasSeedData, resetProfileConfigs } from "./models/configModel";
+import { ensureAdminUser } from "./auth/authService";
 
 const app         = express();
 const PORT        = process.env.PORT ?? 3001;
@@ -33,6 +34,7 @@ async function bootstrap() {
     await resetProfileConfigs();
     console.log("✅ Seed concluído");
   }
+  await ensureAdminUser();
   app.listen(PORT, () => {
     console.log(`🚀 AVIDUS API rodando na porta ${PORT}`);
     console.log(`   CORS: ${CORS_ORIGIN}`);
