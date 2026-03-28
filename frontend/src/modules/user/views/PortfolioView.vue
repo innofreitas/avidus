@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, shallowRef } from "vue";
+import { ref, computed, shallowRef, onMounted } from "vue";
 import * as XLSX from "xlsx";
 import api from "@/shared/utils/api";
 import type { AnalysisResult, ProfileName } from "@/types";
@@ -12,6 +12,7 @@ import AnalysisMagicFormula    from "@/modules/user/components/analysis/Analysis
 import AnalysisBacktest        from "@/modules/user/components/analysis/AnalysisBacktest.vue";
 import SectorComparisonModal   from "@/modules/user/components/analysis/SectorComparisonModal.vue";
 import SectorSelectionModal    from "@/modules/user/components/analysis/SectorSelectionModal.vue";
+import { useUserPortfolioStore } from "@/modules/user/stores/userPortfolioStore";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -102,6 +103,51 @@ const hasData = computed(() =>
   acoes.value.length || etfs.value.length || fundos.value.length ||
   rendaFixa.value.length || tesouroDireto.value.length
 );
+
+// ─── Persistência no BD ───────────────────────────────────────
+
+const portfolioStore = useUserPortfolioStore();
+
+onMounted(async () => {
+  await portfolioStore.fetch();
+  const saved = portfolioStore.data;
+  if (!saved || !portfolioStore.hasData()) return;
+
+  // Mapeia do formato do BD para o formato das linhas da view
+  acoes.value = saved.stocks.map(s => ({
+    codigo: s.ticker, produto: s.name,
+    quantidade: s.quantity, precoFechamento: s.closePrice,
+    valorAtualizado: s.updatedValue, recomendacao: null,
+  }));
+  etfs.value = saved.etfs.map(e => ({
+    codigo: e.ticker, produto: e.name,
+    quantidade: e.quantity, precoFechamento: e.closePrice,
+    valorAtualizado: e.updatedValue,
+  }));
+  fundos.value = saved.funds.map(f => ({
+    codigo: f.ticker, produto: f.name,
+    quantidade: f.quantity, precoFechamento: f.closePrice,
+    valorAtualizado: f.updatedValue,
+  }));
+  rendaFixa.value = saved.fixedIncomes.map(f => ({
+    produto: f.name, quantidade: f.quantity,
+    dataEmissao: f.issuanceDate, vencimento: f.maturityDate,
+    precoAtualizado: f.currentPrice, valorAtualizado: f.updatedValue,
+  }));
+  tesouroDireto.value = saved.treasury.map(t => ({
+    produto: t.name, indexador: t.indexer, vencimento: t.maturityDate,
+    quantidade: t.quantity, valorAplicado: t.investedValue,
+    valorBruto: t.grossValue, valorLiquido: t.netValue,
+    valorAtualizado: t.updatedValue,
+  }));
+
+  // Ativa a primeira aba com dados
+  if      (acoes.value.length)       activeTab.value = "acoes";
+  else if (etfs.value.length)        activeTab.value = "etf";
+  else if (fundos.value.length)      activeTab.value = "fundos";
+  else if (rendaFixa.value.length)   activeTab.value = "renda_fixa";
+  else                               activeTab.value = "tesouro";
+});
 
 // ─── Helpers de parsing ───────────────────────────────────────
 
@@ -307,11 +353,20 @@ async function processFile(file: File) {
 
     fileName.value = file.name;
     // Ativa a primeira aba com dados
-    if (acoes.value.length)        activeTab.value = "acoes";
-    else if (etfs.value.length)    activeTab.value = "etf";
-    else if (fundos.value.length)  activeTab.value = "fundos";
+    if (acoes.value.length)          activeTab.value = "acoes";
+    else if (etfs.value.length)      activeTab.value = "etf";
+    else if (fundos.value.length)    activeTab.value = "fundos";
     else if (rendaFixa.value.length) activeTab.value = "renda_fixa";
-    else                            activeTab.value = "tesouro";
+    else                             activeTab.value = "tesouro";
+
+    // Persiste no BD em background (não bloqueia a UI)
+    portfolioStore.save({
+      stocks:       acoes.value.map(r => ({ ticker: r.codigo, name: r.produto, quantity: r.quantidade, closePrice: r.precoFechamento, updatedValue: r.valorAtualizado })),
+      etfs:         etfs.value.map(r => ({ ticker: r.codigo, name: r.produto, quantity: r.quantidade, closePrice: r.precoFechamento, updatedValue: r.valorAtualizado })),
+      funds:        fundos.value.map(r => ({ ticker: r.codigo, name: r.produto, quantity: r.quantidade, closePrice: r.precoFechamento, updatedValue: r.valorAtualizado })),
+      fixedIncomes: rendaFixa.value.map(r => ({ name: r.produto, quantity: r.quantidade, issuanceDate: r.dataEmissao, maturityDate: r.vencimento, currentPrice: r.precoAtualizado, updatedValue: r.valorAtualizado })),
+      treasury:     tesouroDireto.value.map(r => ({ name: r.produto, indexer: r.indexador, maturityDate: r.vencimento, quantity: r.quantidade, investedValue: r.valorAplicado, grossValue: r.valorBruto, netValue: r.valorLiquido, updatedValue: r.valorAtualizado })),
+    }).catch(e => console.warn("[Portfolio] Falha ao salvar portfólio no BD:", e));
   } catch (e: any) {
     processError.value = e.message;
   } finally {

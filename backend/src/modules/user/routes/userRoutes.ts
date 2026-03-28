@@ -16,6 +16,7 @@ import {
   updateUserSectorFactorWeightsHandler,
   resetUserConfigHandler,
 } from "../controllers/userConfigController";
+import { getUserPortfolioHandler, saveUserPortfolioHandler } from "../controllers/userPortfolioController";
 import { authGuard } from "../middleware/authGuard";
 import { adminGuard } from "../../admin/middleware/adminGuard";
 
@@ -46,10 +47,14 @@ userRouter.get("/comparison/sector/:sector",                  authGuard, compare
 userRouter.get("/comparison/portfolio",                       authGuard, comparePortfolioHandler);
 
 // User config (configurações personalizadas por usuário)
-userRouter.get("/user/config",                                authGuard, getUserConfigHandler);
-userRouter.put("/user/config/indicators",                     authGuard, updateUserIndicatorsHandler);
-userRouter.put("/user/config/thresholds",                     authGuard, updateUserThresholdsHandler);
-userRouter.put("/user/config/sector-factor-weights",          authGuard, updateUserSectorFactorWeightsHandler);
-userRouter.post("/user/config/reset",                         authGuard, resetUserConfigHandler);
+userRouter.get("/user/config",                       authGuard, getUserConfigHandler);
+userRouter.put("/user/config/indicators",             authGuard, updateUserIndicatorsHandler);
+userRouter.put("/user/config/thresholds",             authGuard, updateUserThresholdsHandler);
+userRouter.put("/user/config/sector-factor-weights",  authGuard, updateUserSectorFactorWeightsHandler);
+userRouter.post("/user/config/reset",                 authGuard, resetUserConfigHandler);
+
+// User portfolio (portfólio persistido por usuário)
+userRouter.get("/user/portfolio",                     authGuard, getUserPortfolioHandler);
+userRouter.put("/user/portfolio",                     authGuard, saveUserPortfolioHandler);
 
 export default userRouter;

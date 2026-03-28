@@ -157,6 +157,11 @@ model User {
   userIndicatorConfigs    UserIndicatorConfig[]
   userScoreThresholds     UserScoreThreshold[]
   userSectorFactorWeights UserSectorFactorWeight[]
+  userStocks              UserStock[]
+  userEtfs                UserEtf[]
+  userFunds               UserFund[]
+  userFixedIncomes        UserFixedIncome[]
+  userTreasury            UserTreasury[]
 
   @@map("users")
 }
@@ -209,4 +214,95 @@ model UserSectorFactorWeight {
 
   @@unique([userId, profile, factor])
   @@map("user_sector_factor_weights")
+}
+
+// ─── Portfólio do usuário ─────────────────────────────────────
+
+model UserStock {
+  id           String   @id @default(cuid())
+  userId       String
+  ticker       String
+  name         String
+  quantity     Float?
+  closePrice   Float?
+  updatedValue Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ticker])
+  @@map("user_stocks")
+}
+
+model UserEtf {
+  id           String   @id @default(cuid())
+  userId       String
+  ticker       String
+  name         String
+  quantity     Float?
+  closePrice   Float?
+  updatedValue Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ticker])
+  @@map("user_etfs")
+}
+
+model UserFund {
+  id           String   @id @default(cuid())
+  userId       String
+  ticker       String
+  name         String
+  quantity     Float?
+  closePrice   Float?
+  updatedValue Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ticker])
+  @@map("user_funds")
+}
+
+model UserFixedIncome {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  quantity     Float?
+  issuanceDate String?
+  maturityDate String?
+  currentPrice Float?
+  updatedValue Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("user_fixed_incomes")
+}
+
+model UserTreasury {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  indexer       String?
+  maturityDate  String?
+  quantity      Float?
+  investedValue Float?
+  grossValue    Float?
+  netValue      Float?
+  updatedValue  Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("user_treasury")
 }
