@@ -32,6 +32,8 @@ enum DecisionType {
   VENDA_FORTE
 }
 
+// ─── Tabelas globais ─────────────────
+
 model IndicatorConfig {
   id          String          @id @default(uuid())
   profile     InvestorProfile
@@ -126,6 +128,20 @@ model StockSectorPercentile {
   @@map("stock_sector_percentiles")
 }
 
+model SectorFactorWeight {
+  id        String          @id @default(uuid())
+  profile   InvestorProfile
+  factor    String          // "valor" | "qualidade" | "momentum" | "crescimento"
+  weight    Float           // 0.0 – 1.0 (ex: 0.30 = 30%)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([profile, factor])
+  @@map("sector_factor_weights")
+}
+
+// ─── Tabelas de usuários ─────────────────
+
 model User {
   id                    String                 @id @default(cuid())
   email                 String                 @unique
@@ -138,17 +154,59 @@ model User {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
+  userIndicatorConfigs    UserIndicatorConfig[]
+  userScoreThresholds     UserScoreThreshold[]
+  userSectorFactorWeights UserSectorFactorWeight[]
+
   @@map("users")
 }
 
-model SectorFactorWeight {
+model UserIndicatorConfig {
+  id          String          @id @default(uuid())
+  userId      String
+  profile     InvestorProfile
+  indicatorId String
+  weight      Float
+  idealRange  String?
+  category    String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profile, indicatorId])
+  @@map("user_indicator_configs")
+}
+
+model UserScoreThreshold {
   id        String          @id @default(uuid())
+  userId    String
+  profile   InvestorProfile
+  decision  DecisionType
+  minScore  Float
+  emoji     String
+  desc      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profile, decision])
+  @@map("user_score_thresholds")
+}
+
+model UserSectorFactorWeight {
+  id        String          @id @default(uuid())
+  userId    String
   profile   InvestorProfile
   factor    String          // "valor" | "qualidade" | "momentum" | "crescimento"
   weight    Float           // 0.0 – 1.0 (ex: 0.30 = 30%)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  @@unique([profile, factor])
-  @@map("sector_factor_weights")
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profile, factor])
+  @@map("user_sector_factor_weights")
 }

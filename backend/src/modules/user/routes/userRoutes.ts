@@ -9,6 +9,13 @@ import {
   createSectorHandler, updateSectorHandler, deleteSectorHandler, getStocksBySectorHandler,
 } from "../controllers/stocksController";
 import { compareTickersHandler, compareSectorHandler, comparePortfolioHandler } from "../controllers/comparisonController";
+import {
+  getUserConfigHandler,
+  updateUserIndicatorsHandler,
+  updateUserThresholdsHandler,
+  updateUserSectorFactorWeightsHandler,
+  resetUserConfigHandler,
+} from "../controllers/userConfigController";
 import { authGuard } from "../middleware/authGuard";
 import { adminGuard } from "../../admin/middleware/adminGuard";
 
@@ -34,8 +41,15 @@ userRouter.post("/stocks/load",                       adminGuard, loadStocksHand
 userRouter.post("/backtest",                          authGuard,  backtestHandler);
 
 // Comparison
-userRouter.get("/comparison/tickers",                 authGuard,  compareTickersHandler);
-userRouter.get("/comparison/sector/:sector",          authGuard,  compareSectorHandler);
-userRouter.get("/comparison/portfolio",               authGuard,  comparePortfolioHandler);
+userRouter.get("/comparison/tickers",                         authGuard, compareTickersHandler);
+userRouter.get("/comparison/sector/:sector",                  authGuard, compareSectorHandler);
+userRouter.get("/comparison/portfolio",                       authGuard, comparePortfolioHandler);
+
+// User config (configurações personalizadas por usuário)
+userRouter.get("/user/config",                                authGuard, getUserConfigHandler);
+userRouter.put("/user/config/indicators",                     authGuard, updateUserIndicatorsHandler);
+userRouter.put("/user/config/thresholds",                     authGuard, updateUserThresholdsHandler);
+userRouter.put("/user/config/sector-factor-weights",          authGuard, updateUserSectorFactorWeightsHandler);
+userRouter.post("/user/config/reset",                         authGuard, resetUserConfigHandler);
 
 export default userRouter;

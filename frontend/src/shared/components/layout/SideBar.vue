@@ -10,9 +10,10 @@ const authStore = useAuthStore();
 
 // Menus visíveis para todos os usuários autenticados
 const userNav = [
-  { path: "/analysis",  label: "Análise",     icon: "📈" },
-  { path: "/portfolio", label: "Portfólio",   icon: "💼" },
-  { path: "/account",   label: "Minha Conta", icon: "👤" },
+  { path: "/analysis",  label: "Análise",        icon: "📈" },
+  { path: "/portfolio", label: "Portfólio",      icon: "💼" },
+  { path: "/settings",  label: "Configurações",  icon: "⚙️" },
+  { path: "/account",   label: "Minha Conta",    icon: "👤" },
 ];
 
 // Menus exclusivos para ADMIN
