@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useAuthStore, type InvestorProfileName } from "@/auth/stores/authStore";
 
 const emit = defineEmits<{ (e: "done"): void }>();
 
 const authStore = useAuthStore();
+
+// Chave escoped por usuário para não misturar rascunhos entre contas
+const DRAFT_KEY = `avidus_quest_draft_${authStore.user?.id ?? "anon"}`;
 
 // ─── Modo ─────────────────────────────────────────────────────
 type Mode = "intro" | "quest" | "result" | "choice";
@@ -216,6 +219,48 @@ const QUESTIONS: Question[] = [
 
 const TOTAL = QUESTIONS.length;
 
+// ─── Persistência de rascunho no localStorage ─────────────────
+
+interface Draft {
+  step:            number;
+  mode:            string;
+  answers:         (number | null)[];
+  multiSelections: Record<string, number[]>; // Set → array para JSON
+}
+
+function saveDraft() {
+  if (mode.value !== "quest") return; // só persiste enquanto no questionário
+  const draft: Draft = {
+    step:    currentStep.value,
+    mode:    mode.value,
+    answers: answers.value,
+    multiSelections: Object.fromEntries(
+      Object.entries(multiSelections.value).map(([k, s]) => [k, [...s]])
+    ),
+  };
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+}
+
+function loadDraft() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw) return;
+  try {
+    const draft: Draft = JSON.parse(raw);
+    if (draft.mode === "quest") {
+      answers.value        = draft.answers ?? Array(TOTAL).fill(null);
+      currentStep.value    = draft.step    ?? 0;
+      multiSelections.value = Object.fromEntries(
+        Object.entries(draft.multiSelections ?? {}).map(([k, arr]) => [Number(k), new Set(arr)])
+      );
+      mode.value = "quest";
+    }
+  } catch { /* rascunho corrompido — ignora */ }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+}
+
 // ─── Estado das respostas ─────────────────────────────────────
 
 const currentStep = ref(0);
@@ -223,6 +268,9 @@ const currentStep = ref(0);
 const answers = ref<(number | null)[]>(Array(TOTAL).fill(null));
 // Para perguntas multi-select: índices das opções selecionadas por pergunta
 const multiSelections = ref<Record<number, Set<number>>>({});
+
+// Carrega rascunho ao montar (antes de qualquer interação)
+onMounted(loadDraft);
 
 const currentQ   = computed(() => QUESTIONS[currentStep.value]);
 const currentAns = computed(() => answers.value[currentStep.value]);
@@ -268,6 +316,7 @@ function autoQ18(): number {
 }
 
 watch(currentStep, (step) => {
+  // Auto-fill Q17 e Q18
   if (step === 16 && answers.value[16] === null) {
     answers.value[16] = autoQ17();
     autoFilled.value  = new Set([...autoFilled.value, 16]);
@@ -276,7 +325,11 @@ watch(currentStep, (step) => {
     answers.value[17] = autoQ18();
     autoFilled.value  = new Set([...autoFilled.value, 17]);
   }
+  saveDraft();
 });
+
+// Persiste sempre que respostas ou seleções mudam durante o questionário
+watch([answers, multiSelections], saveDraft, { deep: true });
 
 // ─── Lógica multi-select ──────────────────────────────────────
 
@@ -366,6 +419,7 @@ async function confirmQuest() {
   saveError.value = null;
   try {
     await authStore.saveInvestorProfile(questResult.value, "quest", totalScore.value);
+    clearDraft();
     emit("done");
   } catch (e: any) {
     saveError.value = e?.message ?? "Erro ao salvar perfil";
@@ -380,6 +434,7 @@ async function confirmChoice() {
   saveError.value = null;
   try {
     await authStore.saveInvestorProfile(chosenProfile.value, "choice");
+    clearDraft();
     emit("done");
   } catch (e: any) {
     saveError.value = e?.message ?? "Erro ao salvar perfil";
