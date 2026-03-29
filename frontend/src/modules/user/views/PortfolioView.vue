@@ -545,6 +545,13 @@ const PROFILE_FULL: Record<string, string> = {
   AGRESSIVO:   "Agressivo",
   GENERICO:    "Genérico",
 };
+
+// true quando há dados suficientes, perfil não é GENERICO e não há inconsistência
+const profileConfirmed = computed(() =>
+  totalCart.value > 0 &&
+  userProfile.value !== "GENERICO" &&
+  profileConsistency.value === null
+);
 </script>
 
 <template>
@@ -628,6 +635,12 @@ const PROFILE_FULL: Record<string, string> = {
           </span>
           <span v-else class="italic text-gray-400">🔍 Nenhuma análise realizada</span>
         </div>
+        <p v-if="profileConfirmed"
+          class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+          <span>✅</span>
+          A composição da carteira está alinhada com seu perfil
+          <strong>{{ PROFILE_ICONS[userProfile] }} {{ PROFILE_FULL[userProfile] }}</strong>.
+        </p>
       </div>
       <button
         :disabled="processing"
