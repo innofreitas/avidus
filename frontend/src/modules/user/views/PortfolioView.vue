@@ -155,8 +155,10 @@ onMounted(async () => {
   else if (rendaFixa.value.length)   activeTab.value = "renda_fixa";
   else                               activeTab.value = "tesouro";
 
-  // Se já houve análise anterior, recarrega automaticamente do cache
-  if (portfolioStore.meta?.stockAnalyzedAt && acoes.value.length) {
+  // Se a última análise foi HOJE, recarrega automaticamente do cache
+  const analyzedAt = portfolioStore.meta?.stockAnalyzedAt;
+  const today = new Date().toISOString().slice(0, 10);
+  if (analyzedAt && analyzedAt.slice(0, 10) === today && acoes.value.length) {
     analisarTodas();
   }
 });
