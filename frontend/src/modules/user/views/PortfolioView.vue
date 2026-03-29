@@ -491,6 +491,60 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
   if (!s) return null;
   return { label: s.decision.replace(/_/g, " "), emoji: s.emoji, color: decisionColor(s.decision) };
 }
+
+// ─── Consistência de perfil ──────────────────────────────────
+
+const dismissedConsistency = ref(false);
+
+interface ProfileConsistency {
+  declared:      ProfileName;
+  suggested:     ProfileName;
+  varPct:        number;   // % renda variável
+  fixedPct:      number;   // % renda fixa
+}
+
+const profileConsistency = computed<ProfileConsistency | null>(() => {
+  const declared = userProfile.value;
+  // GENERICO não tem expectativa definida — ignora
+  if (declared === "GENERICO" || totalCart.value === 0) return null;
+
+  // Renda variável: ações + ETFs + fundos (FIIs)
+  const varTotal   = totalAcoes.value + totalEtfs.value + totalFundos.value;
+  // Renda fixa: renda fixa + tesouro
+  const fixedTotal = totalRF.value + totalTD.value;
+  const total      = totalCart.value;
+
+  const varPct   = (varTotal   / total) * 100;
+  const fixedPct = (fixedTotal / total) * 100;
+
+  // Perfil sugerido pela composição
+  let suggested: ProfileName;
+  if      (varPct >= 60) suggested = "AGRESSIVO";
+  else if (varPct >= 25) suggested = "MODERADO";
+  else                   suggested = "CONSERVADOR";
+
+  // Faixas esperadas por perfil declarado
+  const expectations: Record<string, { min: number; max: number }> = {
+    CONSERVADOR: { min:  0, max: 35 },
+    MODERADO:    { min: 20, max: 65 },
+    AGRESSIVO:   { min: 50, max: 100 },
+  };
+  const exp = expectations[declared];
+  if (!exp) return null;
+
+  // Só alerta se a composição estiver fora da faixa esperada E sugerir perfil diferente
+  if (varPct >= exp.min && varPct <= exp.max) return null;
+  if (suggested === declared) return null;
+
+  return { declared, suggested, varPct: +varPct.toFixed(1), fixedPct: +fixedPct.toFixed(1) };
+});
+
+const PROFILE_FULL: Record<string, string> = {
+  CONSERVADOR: "Conservador",
+  MODERADO:    "Moderado",
+  AGRESSIVO:   "Agressivo",
+  GENERICO:    "Genérico",
+};
 </script>
 
 <template>
@@ -582,6 +636,41 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
         <span v-if="processing" class="animate-spin">⏳</span>
         <span v-else>📂</span>
         {{ processing ? "Processando..." : "Atualizar via nova planilha" }}
+      </button>
+    </div>
+
+    <!-- ── Alerta de inconsistência de perfil ───────────────── -->
+    <div v-if="profileConsistency && !dismissedConsistency"
+      class="flex items-start gap-3 p-4 rounded-xl border
+             bg-amber-50 border-amber-300 text-amber-900
+             dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-200">
+      <span class="text-2xl flex-shrink-0 mt-0.5">⚠️</span>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-sm">
+          Inconsistência de perfil detectada
+        </p>
+        <p class="text-sm mt-1 leading-relaxed">
+          Seu perfil declarado é
+          <strong>{{ PROFILE_ICONS[profileConsistency.declared] }} {{ PROFILE_FULL[profileConsistency.declared] }}</strong>,
+          mas a composição atual da sua carteira sugere um perfil
+          <strong>{{ PROFILE_ICONS[profileConsistency.suggested] }} {{ PROFILE_FULL[profileConsistency.suggested] }}</strong>.
+        </p>
+        <p class="text-xs mt-2 text-amber-700 dark:text-amber-400">
+          Renda variável (Ações, ETFs, Fundos):
+          <strong>{{ profileConsistency.varPct }}%</strong>
+          &nbsp;·&nbsp;
+          Renda fixa (RF, Tesouro):
+          <strong>{{ profileConsistency.fixedPct }}%</strong>
+        </p>
+      </div>
+      <button @click="dismissedConsistency = true"
+        class="flex-shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300
+               transition-colors p-1 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50"
+        title="Fechar">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+          viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
       </button>
     </div>
 
