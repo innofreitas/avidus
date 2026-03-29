@@ -154,6 +154,11 @@ onMounted(async () => {
   else if (fundos.value.length)      activeTab.value = "fundos";
   else if (rendaFixa.value.length)   activeTab.value = "renda_fixa";
   else                               activeTab.value = "tesouro";
+
+  // Se já houve análise anterior, recarrega automaticamente do cache
+  if (portfolioStore.meta?.stockAnalyzedAt && acoes.value.length) {
+    analisarTodas();
+  }
 });
 
 // ─── Helpers de parsing ───────────────────────────────────────
