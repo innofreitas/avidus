@@ -1,5 +1,6 @@
 import prisma from "../../config/database";
 import type { InvestorProfile, ScoreResult, ScoreDetail, DecisionType } from "../types";
+import { getUserConfig } from "../../modules/user/models/userConfigModel";
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -448,9 +449,19 @@ const RAW: Record<string, RawScoreFn> = {
   },
 };
 
-async function calcScore(tech: any, fund: any, perfil: InvestorProfile): Promise<ScoreResult> {
-  const cfg = await prisma.indicatorConfig.findMany({ where: { profile: perfil, isActive: true }, orderBy: { weight: "desc" } });
-  const thr = await prisma.scoreThreshold.findMany({ where: { profile: perfil }, orderBy: { minScore: "desc" } });
+async function calcScore(tech: any, fund: any, perfil: InvestorProfile, userId?: string): Promise<ScoreResult> {
+  let cfg: any[];
+  let thr: any[];
+
+  if (userId) {
+    const userCfg = await getUserConfig(userId, perfil);
+    cfg = (userCfg.indicators as any[]).filter((i: any) => i.isActive !== false)
+      .sort((a: any, b: any) => b.weight - a.weight);
+    thr = [...(userCfg.thresholds as any[])].sort((a: any, b: any) => b.minScore - a.minScore);
+  } else {
+    cfg = await prisma.indicatorConfig.findMany({ where: { profile: perfil, isActive: true }, orderBy: { weight: "desc" } });
+    thr = await prisma.scoreThreshold.findMany({ where: { profile: perfil }, orderBy: { minScore: "desc" } });
+  }
 
   const getters: Record<string, () => number | null> = {
     pl:             () => RAW.pl(fund?.pl?.value, perfil),
@@ -503,7 +514,7 @@ async function calcScore(tech: any, fund: any, perfil: InvestorProfile): Promise
 
 // ─── Orquestrador principal ───────────────────────────────────
 
-export async function analyzeStock(rawData: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function analyzeStock(rawData: Record<string, unknown>, userId?: string): Promise<Record<string, unknown>> {
   const { meta, technical, fundamental, recommendations } = rawData as any;
   const currency: string = (meta as any)?.currency ?? "BRL";
 
@@ -524,7 +535,7 @@ export async function analyzeStock(rawData: Record<string, unknown>): Promise<Re
 
   const profiles: InvestorProfile[] = ["GENERICO", "CONSERVADOR", "MODERADO", "AGRESSIVO"];
   const scores = Object.fromEntries(
-    await Promise.all(profiles.map(async (p) => [p, await calcScore(tech, fund, p)]))
+    await Promise.all(profiles.map(async (p) => [p, await calcScore(tech, fund, p, userId)]))
   );
 
   return { meta, technical: tech, fundamental: fund, fairPrice, recommendations: recs, scores };

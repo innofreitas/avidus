@@ -34,7 +34,8 @@ export async function analyzeStockHandler(req: Request, res: Response): Promise<
     }
   }
 
-  const analysis = await analyzeStock(rawData);
+  const userId = (req as any).user?.sub ?? undefined;
+  const analysis = await analyzeStock(rawData, userId);
   res.json({ success: true, data: analysis, fromCache, analyzedAt: new Date().toISOString() });
 }
 

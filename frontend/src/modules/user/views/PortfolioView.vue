@@ -3,7 +3,7 @@ import { ref, computed, shallowRef, onMounted } from "vue";
 import * as XLSX from "xlsx";
 import api from "@/shared/utils/api";
 import type { AnalysisResult, ProfileName } from "@/types";
-import { PROFILE_LABELS, PROFILE_ICONS, ALL_PROFILES } from "@/types";
+import { PROFILE_LABELS, PROFILE_ICONS } from "@/types";
 import { decisionColor, decisionBadgeClass, formatNumber, formatDate } from "@/shared/utils/formatters";
 import AnalysisDetail from "@/modules/user/components/analysis/AnalysisDetail.vue";
 import AnalysisBarsi           from "@/modules/user/components/analysis/AnalysisBarsi.vue";
@@ -13,6 +13,7 @@ import AnalysisBacktest        from "@/modules/user/components/analysis/Analysis
 import SectorComparisonModal   from "@/modules/user/components/analysis/SectorComparisonModal.vue";
 import SectorSelectionModal    from "@/modules/user/components/analysis/SectorSelectionModal.vue";
 import { useUserPortfolioStore } from "@/modules/user/stores/userPortfolioStore";
+import { useAuthStore } from "@/auth/stores/authStore";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -107,6 +108,12 @@ const hasData = computed(() =>
 // ─── Persistência no BD ───────────────────────────────────────
 
 const portfolioStore = useUserPortfolioStore();
+const authStore      = useAuthStore();
+
+// Perfil do usuário logado (fallback MODERADO caso ainda não definido)
+const userProfile = computed<ProfileName>(() =>
+  (authStore.user?.investorProfile as ProfileName | null) ?? "MODERADO"
+);
 
 onMounted(async () => {
   await portfolioStore.fetch();
@@ -715,17 +722,17 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
                 </div>
                 <!-- Resultado -->
                 <div v-else-if="row.recomendacao?.result" class="flex items-start gap-2">
-                  <!-- Badges por perfil + analistas -->
+                  <!-- Badge do perfil do usuário + analistas -->
                   <div class="flex flex-col gap-1 flex-1">
-                    <!-- 4 perfis -->
-                    <div v-for="p in ALL_PROFILES" :key="p" class="flex items-center gap-1.5">
+                    <!-- Perfil do usuário -->
+                    <div class="flex items-center gap-1.5">
                       <span class="text-gray-400 w-20 text-xs truncate flex-shrink-0">
-                        {{ PROFILE_ICONS[p] }} {{ PROFILE_LABELS[p] }}
+                        {{ PROFILE_ICONS[userProfile] }} {{ PROFILE_LABELS[userProfile] }}
                       </span>
-                      <span v-if="row.recomendacao.result.scores?.[p]"
-                        :class="['badge text-xs', decisionBadgeClass(row.recomendacao.result.scores[p].decision)]">
-                        {{ row.recomendacao.result.scores[p].emoji }}
-                        {{ row.recomendacao.result.scores[p].decision.replace(/_/g, " ") }}
+                      <span v-if="row.recomendacao.result.scores?.[userProfile]"
+                        :class="['badge text-xs', decisionBadgeClass(row.recomendacao.result.scores[userProfile].decision)]">
+                        {{ row.recomendacao.result.scores[userProfile].emoji }}
+                        {{ row.recomendacao.result.scores[userProfile].decision.replace(/_/g, " ") }}
                       </span>
                       <span v-else class="text-xs text-gray-400">—</span>
                     </div>
