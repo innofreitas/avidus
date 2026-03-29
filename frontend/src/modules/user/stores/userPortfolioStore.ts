@@ -9,6 +9,13 @@ export interface FundRow    { ticker: string; name: string; quantity: number | n
 export interface FixedIncomeRow { name: string; quantity: number | null; issuanceDate: string | null; maturityDate: string | null; currentPrice: number | null; updatedValue: number | null }
 export interface TreasuryRow    { name: string; indexer: string | null; maturityDate: string | null; quantity: number | null; investedValue: number | null; grossValue: number | null; netValue: number | null; updatedValue: number | null }
 
+export interface PortfolioMeta {
+  id:              string;
+  createdAt:       string;
+  updatedAt:       string;
+  stockAnalyzedAt: string | null;
+}
+
 export interface PortfolioData {
   stocks:       StockRow[];
   etfs:         EtfRow[];
@@ -18,6 +25,7 @@ export interface PortfolioData {
 }
 
 export const useUserPortfolioStore = defineStore("userPortfolio", () => {
+  const meta    = ref<PortfolioMeta | null>(null);
   const data    = ref<PortfolioData | null>(null);
   const loading = ref(false);
   const saving  = ref(false);
@@ -34,8 +42,15 @@ export const useUserPortfolioStore = defineStore("userPortfolio", () => {
     loading.value = true;
     error.value   = null;
     try {
-      const res = await api.get<{ success: boolean; data: PortfolioData }>("/user/portfolio");
-      data.value = res.data.data ?? null;
+      const res = await api.get<{ success: boolean; data: { meta: PortfolioMeta | null } & PortfolioData }>("/user/portfolio");
+      const payload = res.data.data ?? null;
+      meta.value = payload?.meta ?? null;
+      if (payload) {
+        const { meta: _meta, ...rest } = payload;
+        data.value = rest as PortfolioData;
+      } else {
+        data.value = null;
+      }
     } catch (e: any) {
       error.value = e?.response?.data?.message ?? e.message;
     } finally {
@@ -49,6 +64,9 @@ export const useUserPortfolioStore = defineStore("userPortfolio", () => {
     try {
       await api.put("/user/portfolio", payload);
       data.value = payload;
+      // Recarrega meta para obter createdAt/updatedAt atualizados
+      const res = await api.get<{ success: boolean; data: { meta: PortfolioMeta | null } & PortfolioData }>("/user/portfolio");
+      meta.value = res.data.data?.meta ?? null;
     } catch (e: any) {
       error.value = e?.response?.data?.message ?? e.message;
       throw e;
@@ -57,5 +75,16 @@ export const useUserPortfolioStore = defineStore("userPortfolio", () => {
     }
   }
 
-  return { data, loading, saving, error, hasData, fetch, save };
+  async function markAnalyzed() {
+    try {
+      await api.patch("/user/portfolio/analyzed");
+      if (meta.value) {
+        meta.value = { ...meta.value, stockAnalyzedAt: new Date().toISOString() };
+      }
+    } catch (e: any) {
+      console.warn("[Portfolio] Falha ao registrar data de análise:", e.message);
+    }
+  }
+
+  return { meta, data, loading, saving, error, hasData, fetch, save, markAnalyzed };
 });

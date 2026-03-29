@@ -16,7 +16,7 @@ import {
   updateUserSectorFactorWeightsHandler,
   resetUserConfigHandler,
 } from "../controllers/userConfigController";
-import { getUserPortfolioHandler, saveUserPortfolioHandler } from "../controllers/userPortfolioController";
+import { getUserPortfolioHandler, saveUserPortfolioHandler, markPortfolioAnalyzedHandler } from "../controllers/userPortfolioController";
 import { authGuard } from "../middleware/authGuard";
 import { adminGuard } from "../../admin/middleware/adminGuard";
 
@@ -56,5 +56,6 @@ userRouter.post("/user/config/reset",                 authGuard, resetUserConfig
 // User portfolio (portfólio persistido por usuário)
 userRouter.get("/user/portfolio",                     authGuard, getUserPortfolioHandler);
 userRouter.put("/user/portfolio",                     authGuard, saveUserPortfolioHandler);
+userRouter.patch("/user/portfolio/analyzed",          authGuard, markPortfolioAnalyzedHandler);
 
 export default userRouter;

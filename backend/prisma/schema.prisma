@@ -157,6 +157,7 @@ model User {
   userIndicatorConfigs    UserIndicatorConfig[]
   userScoreThresholds     UserScoreThreshold[]
   userSectorFactorWeights UserSectorFactorWeight[]
+  userPortfolio           UserPortfolio?
   userStocks              UserStock[]
   userEtfs                UserEtf[]
   userFunds               UserFund[]
@@ -216,7 +217,21 @@ model UserSectorFactorWeight {
   @@map("user_sector_factor_weights")
 }
 
-// ─── Portfólio do usuário ─────────────────────────────────────
+// ─── Metadados do portfólio ────────────────────────────────────
+
+model UserPortfolio {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  stockAnalyzedAt DateTime? // atualizado manualmente após "Analisar Todos"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt  // atualizado a cada upload de planilha
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_portfolio")
+}
+
+// ─── Dados do portfólio por aba ───────────────────────────────
 
 model UserStock {
   id           String   @id @default(cuid())

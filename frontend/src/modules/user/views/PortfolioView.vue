@@ -403,6 +403,7 @@ async function analisarTodas() {
   }
   analisandoIdx.value = null;
   analisando.value    = false;
+  portfolioStore.markAnalyzed();
 }
 
 function openModal(rec: RecomendacaoState, ticker: string) {
@@ -497,8 +498,11 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       </div>
     </div>
 
-    <!-- ── Upload ─────────────────────────────────────────────── -->
-    <div
+    <!-- ── Input de arquivo (sempre oculto) ──────────────────── -->
+    <input ref="fileInput" type="file" accept=".xlsx,.xls" class="hidden" @change="onFileChange" />
+
+    <!-- ── Upload (só quando não há portfólio salvo) ─────────── -->
+    <div v-if="!portfolioStore.meta && !portfolioStore.loading"
       class="card border-2 border-dashed transition-colors cursor-pointer"
       :class="isDragging
         ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
@@ -508,18 +512,12 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       @drop.prevent="onDrop"
       @click="fileInput?.click()">
 
-      <input ref="fileInput" type="file" accept=".xlsx,.xls" class="hidden" @change="onFileChange" />
-
       <div class="flex flex-col items-center justify-center py-8 gap-3 text-center">
         <div class="text-4xl">
-          {{ processing ? "⏳" : fileName ? "✅" : "📂" }}
+          {{ processing ? "⏳" : "📂" }}
         </div>
         <div v-if="processing">
           <p class="font-semibold text-indigo-600">Processando planilha...</p>
-        </div>
-        <div v-else-if="fileName">
-          <p class="font-semibold text-green-600 dark:text-green-400">{{ fileName }}</p>
-          <p class="text-xs text-gray-400 mt-1">Clique para substituir por outra planilha</p>
         </div>
         <div v-else>
           <p class="font-semibold text-gray-700 dark:text-gray-300">
@@ -533,6 +531,44 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
           </p>
         </div>
       </div>
+    </div>
+
+    <!-- ── Info card (quando portfólio existe) ───────────────── -->
+    <div v-if="portfolioStore.meta"
+      class="card flex items-center gap-4 flex-wrap">
+      <div class="text-3xl">📊</div>
+      <div class="flex-1 min-w-0 space-y-1">
+        <p class="font-semibold text-gray-800 dark:text-gray-100">Portfólio carregado</p>
+        <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
+          <span>
+            📅 Importado em
+            <span class="font-medium text-gray-700 dark:text-gray-300">
+              {{ formatDate(portfolioStore.meta.createdAt) }}
+            </span>
+          </span>
+          <span>
+            🔄 Atualizado em
+            <span class="font-medium text-gray-700 dark:text-gray-300">
+              {{ formatDate(portfolioStore.meta.updatedAt) }}
+            </span>
+          </span>
+          <span v-if="portfolioStore.meta.stockAnalyzedAt">
+            🔍 Última análise em
+            <span class="font-medium text-gray-700 dark:text-gray-300">
+              {{ formatDate(portfolioStore.meta.stockAnalyzedAt) }}
+            </span>
+          </span>
+          <span v-else class="italic text-gray-400">🔍 Nenhuma análise realizada</span>
+        </div>
+      </div>
+      <button
+        :disabled="processing"
+        class="btn-secondary text-sm flex items-center gap-2 flex-shrink-0"
+        @click="fileInput?.click()">
+        <span v-if="processing" class="animate-spin">⏳</span>
+        <span v-else>📂</span>
+        {{ processing ? "Processando..." : "Atualizar via nova planilha" }}
+      </button>
     </div>
 
     <!-- ── Erro de processamento ──────────────────────────────── -->
@@ -579,6 +615,9 @@ function decisaoSummary(rec: RecomendacaoState | null): { label: string; emoji: 
       <div class="flex items-center gap-3 flex-wrap">
         <h2 class="font-semibold text-lg">📈 Ações</h2>
         <span class="text-xs text-gray-400">({{ acoes.length }} ativos)</span>
+        <span v-if="portfolioStore.meta?.stockAnalyzedAt" class="text-xs text-gray-400">
+          · 🔍 Última análise: <span class="font-medium text-gray-600 dark:text-gray-300">{{ formatDate(portfolioStore.meta.stockAnalyzedAt) }}</span>
+        </span>
         <div class="flex-1" />
         <!-- Filtro -->
         <input v-model="filterAcoes" placeholder="Filtrar produto / código..."

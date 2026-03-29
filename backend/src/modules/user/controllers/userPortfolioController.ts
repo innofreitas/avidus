@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getUserPortfolio, saveUserPortfolio } from "../models/userPortfolioModel";
+import { getUserPortfolio, saveUserPortfolio, updateStockAnalyzedAt } from "../models/userPortfolioModel";
 
 function userId(req: Request): string | null {
   return (req as any).user?.sub ?? null;
@@ -29,4 +29,13 @@ export async function saveUserPortfolioHandler(req: Request, res: Response): Pro
 
   await saveUserPortfolio(uid, { stocks, etfs, funds, fixedIncomes, treasury });
   res.json({ success: true, message: "Portfólio salvo" });
+}
+
+// PATCH /api/user/portfolio/analyzed
+export async function markPortfolioAnalyzedHandler(req: Request, res: Response): Promise<void> {
+  const uid = userId(req);
+  if (!uid) { res.status(401).json({ success: false, message: "Não autenticado" }); return; }
+
+  await updateStockAnalyzedAt(uid);
+  res.json({ success: true, message: "Data de análise registrada" });
 }
